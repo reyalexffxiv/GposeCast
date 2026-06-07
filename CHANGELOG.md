@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+
+- Added explicit Action and State headers to the compact actor table.
+- Made the State column always show visible or hidden for every actor row.
+
 ## 0.8.0
 
 - Removed custom Mini/Full mode because the standard window collapse arrow already covers that use case.

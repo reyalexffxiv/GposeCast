@@ -252,9 +252,9 @@ public sealed class MainWindow : Window, IDisposable
         if (!table.Success)
             return;
 
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 44f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 50f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 48f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("State", ImGuiTableColumnFlags.WidthFixed, 56f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableHeadersRow();
 
@@ -406,14 +406,19 @@ public sealed class MainWindow : Window, IDisposable
     /// <summary>Draws the right-side row state label.</summary>
     private static void DrawState(ActorEntry actor, bool alreadyPicked, bool alreadyHidden)
     {
+        // The state column always describes the actor's current visibility, even
+        // when the actor is not part of the picked group. This keeps the compact
+        // table readable while isolation is active.
         if (alreadyHidden)
+        {
             ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), "hidden");
-        else if (alreadyPicked)
-            ImGui.TextColored(new Vector4(0.4f, 1f, 0.6f, 1f), "visible");
-        else if (!actor.IsTargetable)
-            ImGui.TextDisabled("no");
-        else
-            ImGui.TextDisabled(string.Empty);
+            return;
+        }
+
+        ImGui.TextColored(new Vector4(0.4f, 1f, 0.6f, 1f), "visible");
+
+        if (!actor.IsTargetable)
+            DrawTooltip("Actor is visible but not targetable");
     }
 
     /// <summary>Adds the local player to the picked group.</summary>
