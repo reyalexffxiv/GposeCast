@@ -1,39 +1,44 @@
-name: Sample PR Builder for SamplePlugin
+name: PR Build
 
 on:
   pull_request:
     branches: [ master ]
+  push:
+    branches: [ master ]
 
 jobs:
-
   build:
     runs-on: windows-2022
 
-    env:
-      Solution_Name: SamplePlugin
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v5
 
-    - name: Install .NET
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 10.0.x
+      - name: Install .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
 
-    - name: Download Dalamud
-      run: |
-        Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
-        Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
+          Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
 
-    - name: Build with dotnet
-      run: dotnet build --configuration Release
+      - name: Build
+        shell: pwsh
+        run: |
+          dotnet build .\GposeCast.sln -c Release
 
-    - name: Store artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: SamplePlugin
-        path: .\SamplePlugin\bin\x64\Release\SamplePlugin\*
-        if-no-files-found: error
-        retention-days: 1
+      - name: Package plugin
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\Build-DalamudPackage.ps1
 
+      - name: Store artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GposeCast
+          path: .\dist\GposeCast-latest.zip
+          if-no-files-found: error
+          retention-days: 7
