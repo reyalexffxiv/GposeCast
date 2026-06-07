@@ -1,0 +1,13 @@
+{
+  "Author": "reyalexffxiv",
+  "Name": "Gpose Cast",
+  "Punchline": "Build a picked actor group for GPose screenshots.",
+  "Description": "A compact GPose casting tool. Search visible actors, import overworld players into GPose for Brio/Ktisis, build a picked group, and hide everyone else locally for cleaner screenshots.",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "gpose",
+    "screenshots",
+    "actors",
+    "photography"
+  ]
+}

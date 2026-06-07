@@ -1,4 +1,17 @@
-.vs/
-obj/
+# Build outputs
 bin/
+obj/
+.vs/
+.idea/
 *.user
+*.suo
+
+# Local packaging/test artifacts
+release/
+zipcheck/
+latest.zip
+*.zip
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

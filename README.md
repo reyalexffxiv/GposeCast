@@ -1,78 +1,78 @@
-> ⚠️ **Don't click Fork!**
-> 
-> This is a GitHub Template repo. If you want to use this for a plugin, [use this template][new-repo] to make a new repo!
->
-> ![image](https://github.com/goatcorp/SamplePlugin/assets/16760685/d9732094-e1ed-4769-a70b-58ed2b92580c)
+# Gpose Cast
 
-# SamplePlugin
+Gpose Cast is a compact Dalamud GPose utility for building a temporary photo cast.
+It lets you search loaded actors, import visible overworld players into GPose so
+Brio/Ktisis can see them, pick the actors you want in the shot, and locally hide
+other loaded actors for cleaner screenshots.
 
-[![Use This Template badge](https://img.shields.io/badge/Use%20This%20Template-0?logo=github&labelColor=grey)][new-repo]
+## Current scope
 
+- Works primarily inside GPose.
+- Auto-opens in GPose by default.
+- Keeps the plugin window visible while GPose hides normal UI.
+- Searches loaded world and GPose actors.
+- Imports loaded overworld player actors into GPose using a KtisisPyon-style local GPose actor spawn path.
+- Builds a session-only picked group.
+- Isolates the picked group by setting non-picked actors' local alpha to zero.
+- Can include players, NPC-like actors, minions, pets, mounts, ornaments, and event-object-like entries in the hide sweep.
+- Restores hidden actors when isolation stops, GPose ends, or the plugin unloads.
 
-Simple example plugin for Dalamud.
+## Command
 
-This is not designed to be the simplest possible example, but it is also not designed to cover everything you might want to do. For more detailed questions, come ask in [the Discord](https://discord.gg/holdshift).
+```text
+/gposecast
+```
 
-## Main Points
+## Recommended workflow
 
-* Simple functional plugin
-  * Slash command
-  * Main UI
-  * Settings UI
-  * Image loading
-  * Plugin json
-* Simple, slightly-improved plugin configuration handling
-* Project organization
-  * Copies all necessary plugin files to the output directory
-    * Does not copy dependencies that are provided by dalamud
-    * Output directory can be zipped directly and have exactly what is required
-  * Hides data files from visual studio to reduce clutter
-    * Also allows having data files in different paths than VS would usually allow if done in the IDE directly
+1. Enter GPose.
+2. Open Gpose Cast, it should auto-open by default.
+3. Press `+Self`.
+4. Search a visible player.
+5. Press `+` next to them. If they are still a world actor, this imports them into GPose and adds them to the picked group.
+6. Repeat for the rest of the group.
+7. Press `Isolate`.
+8. Use Brio/Ktisis normally on the imported picked actors.
+9. Press `Stop` or `Restore`, or leave GPose to restore automatically.
 
+## Notes for development
 
-The intention is less that any of this is used directly in other projects, and more to show how similar things can be done.
+The code intentionally keeps native interop isolated in `GposeImportService` and
+`Structs/GPoseActorEvent.cs`. The rest of the plugin uses Dalamud services and
+small single-purpose services/windows.
 
-## How To Use
+The GPose import implementation is version-sensitive. It uses signatures and a
+native event layout observed from KtisisPyon 0.4.0.3. If an FFXIV/Dalamud update
+breaks import, start debugging there.
 
-### Getting Started
+Actor hiding uses native `Character.Alpha`. This is local-only and is restored by
+Gpose Cast, but always keep restoration paths simple and defensive.
 
-To begin, [clone this template repository][new-repo] to your own GitHub account. This will automatically bring in everything you need to get a jumpstart on development. You do not need to fork this repository unless you intend to contribute modifications to it.
+## Deferred TODO
 
-Be sure to also check out the [Dalamud Developer Docs][dalamud-docs] for helpful information about building your own plugin. The Developer Docs includes helpful information about all sorts of things, including [how to submit][submit] your newly-created plugin to the official repository. Assuming you use this template repository, the provided project build configuration and license are already chosen to make everything a breeze.
+Glowsticks, emote props, and some spell/crafting VFX can remain visible after the
+source actor is hidden. The object-table sweep and first actor-VFX hook experiments
+did not reliably catch those effects. Future work should inspect EasyEyes or
+VFXEditor-style hooks and add owner-aware VFX suppression, if practical.
 
-[new-repo]: https://github.com/new?template_name=SamplePlugin&template_owner=goatcorp
-[dalamud-docs]: https://dalamud.dev
-[submit]: https://dalamud.dev/plugin-publishing/submission
+## Building
 
-### Prerequisites
+```powershell
+cd G:\AmberDev\GposeCastDev
+dotnet build
+```
 
-SamplePlugin assumes all the following prerequisites are met:
+The development DLL is produced at:
 
-* XIVLauncher, FINAL FANTASY XIV, and Dalamud have all been installed and the game has been run with Dalamud at least once.
-* XIVLauncher is installed to its default directories and configurations.
-  * If a custom path is required for Dalamud's dev directory, it must be set with the `DALAMUD_HOME` environment variable.
-* A .NET Core 8 SDK has been installed and configured, or is otherwise available. (In most cases, the IDE will take care of this.)
+```text
+GposeCast\bin\x64\Debug\GposeCast.dll
+```
 
-### Building
+Add that DLL path as a Dalamud dev plugin location through `/xlsettings`, then enable it from `/xlplugins`.
 
-1. Open up `SamplePlugin.sln` in your C# editor of choice (likely [Visual Studio](https://visualstudio.microsoft.com) or [JetBrains Rider](https://www.jetbrains.com/rider/)).
-2. Build the solution. By default, this will build a `Debug` build, but you can switch to `Release` in your IDE.
-3. The resulting plugin can be found at `SamplePlugin/bin/x64/Debug/SamplePlugin.dll` (or `Release` if appropriate.)
+## Repository checklist before publishing
 
-### Activating in-game
-
-1. Launch the game and use `/xlsettings` in chat or `xlsettings` in the Dalamud Console to open up the Dalamud settings.
-    * In here, go to `Experimental`, and add the full path to the `SamplePlugin.dll` to the list of Dev Plugin Locations.
-2. Next, use `/xlplugins` (chat) or `xlplugins` (console) to open up the Plugin Installer.
-    * In here, go to `Dev Tools > Installed Dev Plugins`, and the `SamplePlugin` should be visible. Enable it.
-3. You should now be able to use `/pmycommand` (chat) or `pmycommand` (console)!
-
-Note that you only need to add it to the Dev Plugin Locations once (Step 1); it is preserved afterwards. You can disable, enable, or load your plugin on startup through the Plugin Installer.
-
-### Reconfiguring for your own uses
-
-Replace all references to `SamplePlugin` in all the files and filenames with your desired name, then start building the plugin of your dreams. You'll figure it out 😁
-
-Dalamud will load the JSON file (by default, `SamplePlugin/SamplePlugin.json`) next to your DLL and use it for metadata, including the description for your plugin in the Plugin Installer. Make sure to update this with information relevant to _your_ plugin!
-
-All participation in this repository is governed by our [Code of Conduct](https://dalamud.dev/code-of-conduct). If you used AI tooling at any point, review the [AI Usage Policy](https://dalamud.dev/plugin-publishing/ai-policy) and disclose your level of AI use. Entirely AI-generated submissions will be rejected, and undisclosed AI use may result in a ban.
+- Confirm the `PackageProjectUrl` in `GposeCast/GposeCast.csproj` matches the final GitHub repo.
+- Review Dalamud's current plugin submission requirements.
+- Disclose AI-assisted development if submitting to an official/reviewed repository.
+- Test the plugin after each game/Dalamud update because native signatures are version-sensitive.
