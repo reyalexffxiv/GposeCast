@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
@@ -243,7 +244,7 @@ public sealed class MainWindow : Window, IDisposable
         if (!table.Success)
             return;
 
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 45f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 42f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
         ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 45f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupScrollFreeze(0, 1);
@@ -314,18 +315,16 @@ public sealed class MainWindow : Window, IDisposable
         DrawTooltip("Import to GPose and add to picked group");
     }
 
-    /// <summary>Draws one Brio-style visibility toggle for manual hide/restore.
-    /// The button uses a compact eye glyph when visible and a restore glyph when hidden.
-    /// </summary>
+    /// <summary>Draws one Brio-style visibility toggle for manual hide/restore.</summary>
     private void DrawVisibilityToggle(ActorEntry actor, bool alreadyHidden)
     {
         var disabled = actor.IsLocalPlayer || !plugin.GposeState.IsInGpose;
-        var label = alreadyHidden ? "↺" : "👁";
+        var icon = alreadyHidden ? FontAwesomeIcon.EyeSlash : FontAwesomeIcon.Eye;
         var action = alreadyHidden ? "Restore actor" : "Hide actor";
 
         using (ImRaii.Disabled(disabled))
         {
-            if (ImGui.SmallButton($"{label}##vis-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}"))
+            if (DrawSmallIconButton($"vis-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}", icon))
             {
                 if (alreadyHidden)
                     plugin.Visibility.Restore(actor.Key);
@@ -337,6 +336,15 @@ public sealed class MainWindow : Window, IDisposable
         }
 
         DrawTooltip(actor.IsLocalPlayer ? "Self is always kept visible" : action);
+    }
+
+    /// <summary>Draws a compact FontAwesome icon button using Dalamud's icon font.</summary>
+    private static bool DrawSmallIconButton(string id, FontAwesomeIcon icon)
+    {
+        using (ImRaii.PushFont(UiBuilder.IconFont))
+        {
+            return ImGui.SmallButton($"{icon.ToIconString()}##{id}");
+        }
     }
 
     /// <summary>Draws the actor name, with special styling for unloaded picked actors.</summary>
