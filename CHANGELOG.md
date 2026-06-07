@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.8
+
+- Made mini mode resizable after the initial collapse.
+- Restored the previous full window size when leaving mini mode.
+- Removed the extra picked-count line from mini mode to avoid the empty tall panel/scrollbar look.
+
 ## 0.7.7
 
 - Made Mini mode a true compact command bar instead of a tall empty panel.

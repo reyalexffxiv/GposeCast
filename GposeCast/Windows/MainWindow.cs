@@ -26,6 +26,9 @@ public sealed class MainWindow : Window, IDisposable
     private bool includeUnnamed;
     private ActorKey? selectedActorKey;
     private bool miniMode;
+    private Vector2 lastFullWindowSize = new(360, 520);
+    private bool resizeMiniNextFrame;
+    private bool resizeFullNextFrame;
 
     /// <summary>Creates the main compact workflow window.</summary>
     public MainWindow(Plugin plugin)
@@ -83,29 +86,42 @@ public sealed class MainWindow : Window, IDisposable
         DrawActorTable(actors);
     }
 
-    /// <summary>Applies different size constraints for full and mini layouts.</summary>
+    /// <summary>Applies the current layout sizing policy.</summary>
     /// <remarks>
-    /// Mini mode should behave like a floating command bar instead of a tall empty
-    /// window. The explicit SetWindowSize call only runs in mini mode, so full mode
-    /// remains user-resizable.
+    /// Mini mode should be a real floating command bar, but it must still be
+    /// user-resizable. We therefore resize only once when entering mini mode. When
+    /// returning to full mode, the window restores the last full-size dimensions the
+    /// user had before collapsing.
     /// </remarks>
-    private void ApplyCurrentWindowSizing(bool force = false)
+    private void ApplyCurrentWindowSizing()
     {
         SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = miniMode
-                ? new Vector2(235, 78)
+                ? new Vector2(235, 68)
                 : new Vector2(235, 80),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
-        if (miniMode || force)
+        if (resizeMiniNextFrame)
         {
-            var targetSize = miniMode
-                ? new Vector2(260, 88)
-                : new Vector2(285, 520);
-            var condition = miniMode ? ImGuiCond.Always : ImGuiCond.Once;
-            ImGui.SetWindowSize(targetSize * ImGuiHelpers.GlobalScale, condition);
+            resizeMiniNextFrame = false;
+            ImGui.SetWindowSize(new Vector2(260, 78) * ImGuiHelpers.GlobalScale, ImGuiCond.Always);
+            return;
+        }
+
+        if (resizeFullNextFrame)
+        {
+            resizeFullNextFrame = false;
+            ImGui.SetWindowSize(lastFullWindowSize, ImGuiCond.Always);
+            return;
+        }
+
+        if (!miniMode)
+        {
+            var currentSize = ImGui.GetWindowSize();
+            if (currentSize.X > 0 && currentSize.Y > 0)
+                lastFullWindowSize = currentSize;
         }
     }
 
@@ -171,8 +187,12 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine();
         if (ImGui.SmallButton("Mini"))
         {
+            var currentSize = ImGui.GetWindowSize();
+            if (currentSize.X > 0 && currentSize.Y > 0)
+                lastFullWindowSize = currentSize;
+
             miniMode = true;
-            ApplyCurrentWindowSizing(force: true);
+            resizeMiniNextFrame = true;
         }
         DrawTooltip("Collapse to a tiny control panel");
     }
@@ -183,7 +203,7 @@ public sealed class MainWindow : Window, IDisposable
         if (ImGui.SmallButton("Full"))
         {
             miniMode = false;
-            ApplyCurrentWindowSizing(force: true);
+            resizeFullNextFrame = true;
         }
         DrawTooltip("Expand Gpose Cast");
 
@@ -198,7 +218,6 @@ public sealed class MainWindow : Window, IDisposable
         }
         DrawTooltip("Restore every actor hidden by Gpose Cast");
 
-        ImGui.TextDisabled($"Picked: {plugin.CastGroup.PickedActors.Count}");
     }
 
     /// <summary>Draws the isolate/stop button with its safety disabled state.</summary>
