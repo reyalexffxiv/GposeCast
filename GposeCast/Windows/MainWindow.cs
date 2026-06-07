@@ -75,55 +75,40 @@ public sealed class MainWindow : Window, IDisposable
         DrawActorTable(actors);
     }
 
-    /// <summary>Draws the title/status area.</summary>
+    /// <summary>Draws the compact isolation status only when it is useful.</summary>
     private void DrawCompactHeader()
     {
-        var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
-        ImGui.TextUnformatted($"Gpose Cast · {gposeText}");
-
-        var statusText = BuildFullStatusText();
-        if (string.IsNullOrWhiteSpace(statusText))
+        // The title bar already says "Gpose Cast" and the window is GPose-only, so
+        // avoid repeating that information inside the window. The status line only appears
+        // while isolation is active because that is the state users need to watch while shooting.
+        if (!plugin.Visibility.IsIsolationActive)
             return;
 
-        if (plugin.Visibility.IsIsolationActive)
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), statusText);
-        else
-            ImGui.TextDisabled(statusText);
+        ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f),
+            $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible");
     }
-
-    /// <summary>Builds the normal status message shown in full mode.</summary>
-    private string BuildFullStatusText()
-    {
-        if (plugin.Visibility.IsIsolationActive)
-            return $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible";
-
-        return string.IsNullOrWhiteSpace(plugin.GposeImport.LastImportStatus)
-            ? "Ready"
-            : plugin.GposeImport.LastImportStatus;
-    }
-
 
     /// <summary>Draws the compact top-row action buttons.</summary>
     private void DrawToolbar()
     {
-        if (ImGui.SmallButton("Cfg"))
+        if (DrawToolbarButton("Cfg", ButtonTone.Neutral))
             plugin.ToggleConfigUi();
         DrawTooltip("Settings");
 
         ImGui.SameLine();
-        if (ImGui.SmallButton("Self"))
+        if (DrawToolbarButton("Self", ButtonTone.Positive))
             AddSelf();
         DrawTooltip("Add yourself to the picked group");
 
         ImGui.SameLine();
-        if (ImGui.SmallButton("Target"))
+        if (DrawToolbarButton("Target", ButtonTone.Positive))
             AddCurrentTarget();
         DrawTooltip("Add your current GPose/world target");
 
         ImGui.SameLine();
         using (ImRaii.Disabled(plugin.CastGroup.PickedActors.Count == 0))
         {
-            if (ImGui.SmallButton("Clear"))
+            if (DrawToolbarButton("Clear", ButtonTone.Warning))
             {
                 plugin.Visibility.StopIsolation();
                 plugin.CastGroup.Clear();
@@ -137,10 +122,42 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine();
         using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0))
         {
-            if (ImGui.SmallButton($"Restore ({plugin.Visibility.HiddenCount})"))
+            if (DrawToolbarButton($"Restore ({plugin.Visibility.HiddenCount})", ButtonTone.Restore))
                 plugin.Visibility.StopIsolation();
         }
         DrawTooltip("Restore every actor hidden by Gpose Cast");
+    }
+
+    /// <summary>Small color set used by the compact toolbar buttons.</summary>
+    private enum ButtonTone
+    {
+        Neutral,
+        Positive,
+        Isolate,
+        Warning,
+        Danger,
+        Restore,
+    }
+
+    /// <summary>Draws a compact toolbar button with a subtle VenueHost-style color accent.</summary>
+    private static bool DrawToolbarButton(string label, ButtonTone tone)
+    {
+        var (button, hovered, active) = tone switch
+        {
+            ButtonTone.Positive => (new Vector4(0.18f, 0.38f, 0.24f, 1f), new Vector4(0.22f, 0.48f, 0.30f, 1f), new Vector4(0.14f, 0.30f, 0.20f, 1f)),
+            ButtonTone.Isolate => (new Vector4(0.38f, 0.30f, 0.14f, 1f), new Vector4(0.48f, 0.38f, 0.18f, 1f), new Vector4(0.30f, 0.24f, 0.12f, 1f)),
+            ButtonTone.Warning => (new Vector4(0.36f, 0.25f, 0.14f, 1f), new Vector4(0.46f, 0.32f, 0.18f, 1f), new Vector4(0.28f, 0.20f, 0.12f, 1f)),
+            ButtonTone.Danger => (new Vector4(0.42f, 0.18f, 0.18f, 1f), new Vector4(0.54f, 0.22f, 0.22f, 1f), new Vector4(0.34f, 0.14f, 0.14f, 1f)),
+            ButtonTone.Restore => (new Vector4(0.18f, 0.32f, 0.42f, 1f), new Vector4(0.22f, 0.40f, 0.52f, 1f), new Vector4(0.14f, 0.26f, 0.34f, 1f)),
+            _ => (new Vector4(0.25f, 0.25f, 0.25f, 1f), new Vector4(0.34f, 0.34f, 0.34f, 1f), new Vector4(0.20f, 0.20f, 0.20f, 1f)),
+        };
+
+        ImGui.PushStyleColor(ImGuiCol.Button, button);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hovered);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, active);
+        var clicked = ImGui.SmallButton(label);
+        ImGui.PopStyleColor(3);
+        return clicked;
     }
 
     /// <summary>Draws the isolate/stop button with its safety disabled state.</summary>
@@ -152,7 +169,8 @@ public sealed class MainWindow : Window, IDisposable
 
         using (ImRaii.Disabled(disableButton))
         {
-            if (!ImGui.SmallButton(buttonText))
+            var tone = plugin.Visibility.IsIsolationActive ? ButtonTone.Danger : ButtonTone.Isolate;
+            if (!DrawToolbarButton(buttonText, tone))
                 return;
 
             if (plugin.Visibility.IsIsolationActive)
@@ -174,7 +192,7 @@ public sealed class MainWindow : Window, IDisposable
     private void DrawFilters()
     {
         ImGui.SetNextItemWidth(-1f);
-        ImGui.InputTextWithHint("##GposeCastSearch", "Search actor name...", ref searchText, 128);
+        ImGui.InputTextWithHint("##GposeCastSearch", "Search player...", ref searchText, 128);
 
         if (ImGui.Checkbox("Players only", ref playersOnly))
         {

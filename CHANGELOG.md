@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- Removed redundant non-isolation status text from the top of the main window.
+- Changed the search hint to "Search player..." for a more human label.
+- Added subtle color accents to the compact toolbar buttons.
+
 ## 0.8.1
 
 - Added explicit Action and State headers to the compact actor table.
