@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9
+- Tightened mini mode into a short no-scroll command bar.
+- Mini mode now uses a shorter status line and restores full mode sizing reliably.
+
 ## 0.7.8
 
 - Made mini mode resizable after the initial collapse.

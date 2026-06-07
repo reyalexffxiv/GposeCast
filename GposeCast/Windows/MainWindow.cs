@@ -29,6 +29,7 @@ public sealed class MainWindow : Window, IDisposable
     private Vector2 lastFullWindowSize = new(360, 520);
     private bool resizeMiniNextFrame;
     private bool resizeFullNextFrame;
+    private readonly ImGuiWindowFlags normalWindowFlags;
 
     /// <summary>Creates the main compact workflow window.</summary>
     public MainWindow(Plugin plugin)
@@ -39,6 +40,8 @@ public sealed class MainWindow : Window, IDisposable
             MinimumSize = new Vector2(235, 80),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
+
+        normalWindowFlags = Flags;
 
         this.plugin = plugin;
         playersOnly = plugin.Configuration.PlayersOnly;
@@ -95,10 +98,14 @@ public sealed class MainWindow : Window, IDisposable
     /// </remarks>
     private void ApplyCurrentWindowSizing()
     {
+        Flags = miniMode
+            ? normalWindowFlags | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse
+            : normalWindowFlags;
+
         SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = miniMode
-                ? new Vector2(235, 68)
+                ? new Vector2(250, 72)
                 : new Vector2(235, 80),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
@@ -106,7 +113,7 @@ public sealed class MainWindow : Window, IDisposable
         if (resizeMiniNextFrame)
         {
             resizeMiniNextFrame = false;
-            ImGui.SetWindowSize(new Vector2(260, 78) * ImGuiHelpers.GlobalScale, ImGuiCond.Always);
+            ImGui.SetWindowSize(new Vector2(270, 74) * ImGuiHelpers.GlobalScale, ImGuiCond.Always);
             return;
         }
 
@@ -128,14 +135,16 @@ public sealed class MainWindow : Window, IDisposable
     /// <summary>Draws the title/status area.</summary>
     private void DrawCompactHeader()
     {
-        var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
-        var statusText = plugin.Visibility.IsIsolationActive
-            ? $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible"
-            : string.IsNullOrWhiteSpace(plugin.GposeImport.LastImportStatus)
-                ? "Ready"
-                : plugin.GposeImport.LastImportStatus;
+        if (miniMode)
+        {
+            DrawMiniStatusLine();
+            return;
+        }
 
+        var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
         ImGui.TextUnformatted($"Gpose Cast · {gposeText}");
+
+        var statusText = BuildFullStatusText();
         if (string.IsNullOrWhiteSpace(statusText))
             return;
 
@@ -144,6 +153,32 @@ public sealed class MainWindow : Window, IDisposable
         else
             ImGui.TextDisabled(statusText);
     }
+
+    /// <summary>Draws a single short mini-mode status line that avoids text wrapping.</summary>
+    private void DrawMiniStatusLine()
+    {
+        var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
+        var statusText = plugin.Visibility.IsIsolationActive
+            ? $"{gposeText} · ON {plugin.Visibility.HiddenCount}H / {plugin.CastGroup.PickedActors.Count}V"
+            : $"{gposeText} · Ready";
+
+        if (plugin.Visibility.IsIsolationActive)
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), statusText);
+        else
+            ImGui.TextDisabled(statusText);
+    }
+
+    /// <summary>Builds the normal status message shown in full mode.</summary>
+    private string BuildFullStatusText()
+    {
+        if (plugin.Visibility.IsIsolationActive)
+            return $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible";
+
+        return string.IsNullOrWhiteSpace(plugin.GposeImport.LastImportStatus)
+            ? "Ready"
+            : plugin.GposeImport.LastImportStatus;
+    }
+
 
     /// <summary>Draws the compact top-row action buttons.</summary>
     private void DrawToolbar()
@@ -213,7 +248,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine();
         using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0))
         {
-            if (ImGui.SmallButton($"Restore ({plugin.Visibility.HiddenCount})"))
+            if (ImGui.SmallButton($"Restore##mini-restore"))
                 plugin.Visibility.StopIsolation();
         }
         DrawTooltip("Restore every actor hidden by Gpose Cast");
