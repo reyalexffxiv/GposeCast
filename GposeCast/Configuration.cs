@@ -39,6 +39,9 @@ public class Configuration : IPluginConfiguration
     /// <summary>Whether the main window should open automatically when GPose starts.</summary>
     public bool AutoOpenInGpose { get; set; } = true;
 
+    /// <summary>Whether the compact main window should show the decorative camera peepo mascot.</summary>
+    public bool ShowMascot { get; set; } = true;
+
     /// <summary>Legacy field kept so old config files deserialize safely. Gpose Cast now always closes the main window when GPose ends.</summary>
     public bool AutoCloseWhenLeavingGpose { get; set; } = true;
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.8
+- Micro-nudged the peepo mascot slightly left and up for cleaner filter-row alignment.
+
+## 0.8.7
+- Nudged the peepo mascot upward and made it slightly smaller so it sits on the filter row without crowding the picked panel.
+
+## 0.8.6
+
+- Moved the peepo camera mascot below the search bar and anchored it to the filter row.
+
+## 0.8.5
+
+- Increased and nudged the peepo camera mascot so it is easier to see without crowding the filter row.
+
+## 0.8.4
+
+- Added an optional camera peepo mascot to the compact GPose window.
+- Added a settings toggle to show or hide the mascot.
+
+
 ## 0.8.3
 
 - Moved Settings from the toolbar into a title-bar cog button.

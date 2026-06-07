@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.Textures;
 using Dalamud.Interface.Windowing;
 using GposeCast.Models;
 
@@ -20,7 +22,10 @@ namespace GposeCast.Windows;
 /// </remarks>
 public sealed class MainWindow : Window, IDisposable
 {
+    private const string MascotResourceName = "GposeCast.Assets.peepo_camera.png";
+
     private readonly Plugin plugin;
+    private readonly ISharedImmediateTexture? mascotTexture;
     private string searchText = string.Empty;
     private bool playersOnly;
     private bool includeUnnamed;
@@ -37,6 +42,7 @@ public sealed class MainWindow : Window, IDisposable
         };
 
         this.plugin = plugin;
+        mascotTexture = LoadMascotTexture();
         playersOnly = plugin.Configuration.PlayersOnly;
         includeUnnamed = plugin.Configuration.IncludeUnnamed;
 
@@ -55,6 +61,8 @@ public sealed class MainWindow : Window, IDisposable
     public void Dispose()
     {
         plugin.GposeImport.ImportCompleted -= OnImportCompleted;
+        if (mascotTexture is IDisposable disposable)
+            disposable.Dispose();
     }
 
     /// <inheritdoc />
@@ -82,6 +90,53 @@ public sealed class MainWindow : Window, IDisposable
         DrawPickedGroup(pickedHeight);
         ImGui.Spacing();
         DrawActorTable(actors);
+    }
+
+
+    /// <summary>Loads the small decorative camera peepo from embedded resources.</summary>
+    private static ISharedImmediateTexture? LoadMascotTexture()
+    {
+        try
+        {
+            return Plugin.TextureProvider.GetFromManifestResource(
+                Assembly.GetExecutingAssembly(),
+                MascotResourceName);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Could not load Gpose Cast mascot texture.");
+            return null;
+        }
+    }
+
+    /// <summary>Draws the decorative camera peepo on the right side of the filter row.</summary>
+    private void DrawMascotOnFilterRow(float filterRowY)
+    {
+        if (!plugin.Configuration.ShowMascot || mascotTexture is null)
+            return;
+
+        var wrap = mascotTexture.GetWrapOrDefault();
+        if (wrap is null)
+            return;
+
+        var scale = ImGuiHelpers.GlobalScale;
+        var size = 44f * scale;
+        var rightPadding = 26f * scale;
+        var windowPos = ImGui.GetWindowPos();
+        var windowSize = ImGui.GetWindowSize();
+
+        // Keep the mascot anchored to the filter row below the search bar.
+        // Nudge it slightly upward so it decorates the filter row without sitting on the picked panel.
+        // If the window is extremely narrow, skip it instead of crowding the checkboxes.
+        if (windowSize.X < 320f * scale)
+            return;
+
+        var imageMin = new Vector2(
+            windowPos.X + windowSize.X - rightPadding - size,
+            filterRowY - 8f * scale);
+        var imageMax = imageMin + new Vector2(size, size);
+
+        ImGui.GetWindowDrawList().AddImage(wrap.Handle, imageMin, imageMax);
     }
 
     /// <summary>Draws the compact isolation status only when it is useful.</summary>
@@ -198,6 +253,8 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputTextWithHint("##GposeCastSearch", "Search player...", ref searchText, 128);
 
+        var filterRowY = ImGui.GetCursorScreenPos().Y;
+
         if (ImGui.Checkbox("Players only", ref playersOnly))
         {
             plugin.Configuration.PlayersOnly = playersOnly;
@@ -212,6 +269,8 @@ public sealed class MainWindow : Window, IDisposable
             plugin.Configuration.Save();
         }
         DrawTooltip("Show unnamed object-table entries in the compact actor list");
+
+        DrawMascotOnFilterRow(filterRowY);
     }
 
     /// <summary>Draws the picked group table.</summary>
