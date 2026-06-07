@@ -21,6 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
     [PluginService] internal static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
 
@@ -68,7 +69,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open Gpose Cast. Use /gposecast to build a picked actor group for screenshots.",
+            HelpMessage = "Open Gpose Cast while in GPose. The plugin is designed to work only inside GPose.",
         });
 
         // GPose hides normal Dalamud windows unless this flag is set. Brio uses the
@@ -110,7 +111,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Slash-command handler.</summary>
     private void OnCommand(string command, string args)
     {
-        MainWindow.Toggle();
+        ToggleMainUi();
     }
 
     /// <summary>
@@ -135,6 +136,18 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Toggles the configuration window.</summary>
     public void ToggleConfigUi() => ConfigWindow.Toggle();
 
-    /// <summary>Toggles the main window.</summary>
-    public void ToggleMainUi() => MainWindow.Toggle();
+    /// <summary>
+    /// Toggles the main window. Gpose Cast intentionally refuses to open outside
+    /// GPose because its actor import and isolation features are GPose-only.
+    /// </summary>
+    public void ToggleMainUi()
+    {
+        if (!GposeState.IsInGpose)
+        {
+            ChatGui.PrintError("Cannot open Gpose Cast outside of GPose.");
+            return;
+        }
+
+        MainWindow.Toggle();
+    }
 }

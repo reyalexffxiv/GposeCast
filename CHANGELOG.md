@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+- Prevented `/gposecast` and the main UI shortcut from opening the workspace outside GPose.
+- Added a Dalamud chat error message when the workspace is requested outside GPose.
+
+
 ## 0.7.0.0
 
 Code cleanup and repository preparation pass.

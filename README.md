@@ -35,44 +35,5 @@ other loaded actors for cleaner screenshots.
 8. Use Brio/Ktisis normally on the imported picked actors.
 9. Press `Stop` or `Restore`, or leave GPose to restore automatically.
 
-## Notes for development
 
-The code intentionally keeps native interop isolated in `GposeImportService` and
-`Structs/GPoseActorEvent.cs`. The rest of the plugin uses Dalamud services and
-small single-purpose services/windows.
-
-The GPose import implementation is version-sensitive. It uses signatures and a
-native event layout observed from KtisisPyon 0.4.0.3. If an FFXIV/Dalamud update
-breaks import, start debugging there.
-
-Actor hiding uses native `Character.Alpha`. This is local-only and is restored by
-Gpose Cast, but always keep restoration paths simple and defensive.
-
-## Deferred TODO
-
-Glowsticks, emote props, and some spell/crafting VFX can remain visible after the
-source actor is hidden. The object-table sweep and first actor-VFX hook experiments
-did not reliably catch those effects. Future work should inspect EasyEyes or
-VFXEditor-style hooks and add owner-aware VFX suppression, if practical.
-
-## Building
-
-```powershell
-cd G:\AmberDev\GposeCastDev
-dotnet build
-```
-
-The development DLL is produced at:
-
-```text
-GposeCast\bin\x64\Debug\GposeCast.dll
-```
-
-Add that DLL path as a Dalamud dev plugin location through `/xlsettings`, then enable it from `/xlplugins`.
-
-## Repository checklist before publishing
-
-- Confirm the `PackageProjectUrl` in `GposeCast/GposeCast.csproj` matches the final GitHub repo.
-- Review Dalamud's current plugin submission requirements.
-- Disclose AI-assisted development if submitting to an official/reviewed repository.
-- Test the plugin after each game/Dalamud update because native signatures are version-sensitive.
+Gpose Cast intentionally refuses to open outside GPose and will print an error message if `/gposecast` is used in the overworld.
