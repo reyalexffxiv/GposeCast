@@ -11,6 +11,8 @@ release/
 zipcheck/
 latest.zip
 *.zip
+!plugins/GposeCast.zip
+dist/
 
 # OS/editor noise
 .DS_Store
