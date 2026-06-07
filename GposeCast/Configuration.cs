@@ -39,8 +39,8 @@ public class Configuration : IPluginConfiguration
     /// <summary>Whether the main window should open automatically when GPose starts.</summary>
     public bool AutoOpenInGpose { get; set; } = true;
 
-    /// <summary>Whether the main window should close automatically when GPose ends.</summary>
-    public bool AutoCloseWhenLeavingGpose { get; set; } = false;
+    /// <summary>Legacy field kept so old config files deserialize safely. Gpose Cast now always closes the main window when GPose ends.</summary>
+    public bool AutoCloseWhenLeavingGpose { get; set; } = true;
 
     /// <summary>Saves the current configuration using Dalamud's plugin config store.</summary>
     public void Save()

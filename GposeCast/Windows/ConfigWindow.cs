@@ -37,7 +37,6 @@ public sealed class ConfigWindow : Window, IDisposable
         DrawCheckbox("Hide minions and pets", nameof(Configuration.HideMinionsAndPets), configuration.HideMinionsAndPets, value => configuration.HideMinionsAndPets = value);
         DrawCheckbox("Auto-hide new arrivals", nameof(Configuration.AutoHideNewArrivals), configuration.AutoHideNewArrivals, value => configuration.AutoHideNewArrivals = value);
         DrawCheckbox("Auto-open in GPose", nameof(Configuration.AutoOpenInGpose), configuration.AutoOpenInGpose, value => configuration.AutoOpenInGpose = value);
-        DrawCheckbox("Auto-close when leaving GPose", nameof(Configuration.AutoCloseWhenLeavingGpose), configuration.AutoCloseWhenLeavingGpose, value => configuration.AutoCloseWhenLeavingGpose = value);
     }
 
     /// <summary>Draws a persisted checkbox and saves immediately when it changes.</summary>

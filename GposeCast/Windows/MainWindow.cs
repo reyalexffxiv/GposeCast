@@ -39,6 +39,15 @@ public sealed class MainWindow : Window, IDisposable
         this.plugin = plugin;
         playersOnly = plugin.Configuration.PlayersOnly;
         includeUnnamed = plugin.Configuration.IncludeUnnamed;
+
+        TitleBarButtons.Add(new TitleBarButton
+        {
+            Icon = FontAwesomeIcon.Cog,
+            IconOffset = new Vector2(1.5f, 1.5f),
+            ShowTooltip = () => ImGui.SetTooltip("Settings"),
+            Click = _ => plugin.ToggleConfigUi(),
+        });
+
         plugin.GposeImport.ImportCompleted += OnImportCompleted;
     }
 
@@ -91,11 +100,6 @@ public sealed class MainWindow : Window, IDisposable
     /// <summary>Draws the compact top-row action buttons.</summary>
     private void DrawToolbar()
     {
-        if (DrawToolbarButton("Cfg", ButtonTone.Neutral))
-            plugin.ToggleConfigUi();
-        DrawTooltip("Settings");
-
-        ImGui.SameLine();
         if (DrawToolbarButton("Self", ButtonTone.Positive))
             AddSelf();
         DrawTooltip("Add yourself to the picked group");
@@ -122,7 +126,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine();
         using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0))
         {
-            if (DrawToolbarButton($"Restore ({plugin.Visibility.HiddenCount})", ButtonTone.Restore))
+            if (DrawToolbarButton($"Restore {plugin.Visibility.HiddenCount}", ButtonTone.Restore))
                 plugin.Visibility.StopIsolation();
         }
         DrawTooltip("Restore every actor hidden by Gpose Cast");

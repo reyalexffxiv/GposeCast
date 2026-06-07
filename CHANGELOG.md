@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3
+
+- Moved Settings from the toolbar into a title-bar cog button.
+- Made the main Gpose Cast window always close when leaving GPose.
+- Shortened the restore toolbar label to avoid cramped text.
+
 ## 0.8.2
 
 - Removed redundant non-isolation status text from the top of the main window.

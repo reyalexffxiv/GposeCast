@@ -129,8 +129,7 @@ public sealed class Plugin : IDalamudPlugin
             return;
 
         Visibility.StopIsolation();
-        if (Configuration.AutoCloseWhenLeavingGpose)
-            MainWindow.IsOpen = false;
+        MainWindow.IsOpen = false;
     }
 
     /// <summary>Toggles the configuration window.</summary>
