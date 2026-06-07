@@ -33,7 +33,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(235, 300),
+            MinimumSize = new Vector2(235, 80),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
@@ -52,6 +52,7 @@ public sealed class MainWindow : Window, IDisposable
     /// <inheritdoc />
     public override void Draw()
     {
+        ApplyCurrentWindowSizing();
         DrawCompactHeader();
 
         // Keep sweeping newly loaded candidates while isolation is active. This is what
@@ -80,6 +81,32 @@ public sealed class MainWindow : Window, IDisposable
         DrawPickedGroup(pickedHeight);
         ImGui.Spacing();
         DrawActorTable(actors);
+    }
+
+    /// <summary>Applies different size constraints for full and mini layouts.</summary>
+    /// <remarks>
+    /// Mini mode should behave like a floating command bar instead of a tall empty
+    /// window. The explicit SetWindowSize call only runs in mini mode, so full mode
+    /// remains user-resizable.
+    /// </remarks>
+    private void ApplyCurrentWindowSizing(bool force = false)
+    {
+        SizeConstraints = new WindowSizeConstraints
+        {
+            MinimumSize = miniMode
+                ? new Vector2(235, 78)
+                : new Vector2(235, 80),
+            MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
+        };
+
+        if (miniMode || force)
+        {
+            var targetSize = miniMode
+                ? new Vector2(260, 88)
+                : new Vector2(285, 520);
+            var condition = miniMode ? ImGuiCond.Always : ImGuiCond.Once;
+            ImGui.SetWindowSize(targetSize * ImGuiHelpers.GlobalScale, condition);
+        }
     }
 
     /// <summary>Draws the title/status area.</summary>
@@ -143,7 +170,10 @@ public sealed class MainWindow : Window, IDisposable
 
         ImGui.SameLine();
         if (ImGui.SmallButton("Mini"))
+        {
             miniMode = true;
+            ApplyCurrentWindowSizing(force: true);
+        }
         DrawTooltip("Collapse to a tiny control panel");
     }
 
@@ -151,7 +181,10 @@ public sealed class MainWindow : Window, IDisposable
     private void DrawMiniToolbar()
     {
         if (ImGui.SmallButton("Full"))
+        {
             miniMode = false;
+            ApplyCurrentWindowSizing(force: true);
+        }
         DrawTooltip("Expand Gpose Cast");
 
         ImGui.SameLine();
@@ -327,7 +360,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         using (ImRaii.Disabled(alreadyPicked))
         {
-            if (ImGui.SmallButton($"+##add-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}"))
+            if (DrawSmallIconButton($"add-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}", FontAwesomeIcon.UserPlus))
                 AddActorToPicked(actor);
         }
 
@@ -339,7 +372,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         using (ImRaii.Disabled(alreadyPicked))
         {
-            if (ImGui.SmallButton($"+##importadd-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}"))
+            if (DrawSmallIconButton($"importadd-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}", FontAwesomeIcon.UserPlus))
             {
                 plugin.GposeImport.ImportOverworldActor(actor, addToPickedAfterImport: true);
                 selectedActorKey = actor.Key;

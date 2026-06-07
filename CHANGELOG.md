@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.7
+
+- Made Mini mode a true compact command bar instead of a tall empty panel.
+- Replaced text plus buttons with FontAwesome UserPlus icons for add/import actions.
+
 ## 0.7.6
 - Added a compact mini mode for shooting after isolation is prepared.
 - Removed GPose/World debug letters from actor rows and moved source details into tooltips.
