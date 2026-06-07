@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+- Removed custom Mini/Full mode because the standard window collapse arrow already covers that use case.
+- Simplified main window sizing logic and kept the compact full UI as the only active layout.
+
+
 ## 0.7.9
 - Tightened mini mode into a short no-scroll command bar.
 - Mini mode now uses a shorter status line and restores full mode sizing reliably.

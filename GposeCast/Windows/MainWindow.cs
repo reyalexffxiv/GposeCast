@@ -25,11 +25,6 @@ public sealed class MainWindow : Window, IDisposable
     private bool playersOnly;
     private bool includeUnnamed;
     private ActorKey? selectedActorKey;
-    private bool miniMode;
-    private Vector2 lastFullWindowSize = new(360, 520);
-    private bool resizeMiniNextFrame;
-    private bool resizeFullNextFrame;
-    private readonly ImGuiWindowFlags normalWindowFlags;
 
     /// <summary>Creates the main compact workflow window.</summary>
     public MainWindow(Plugin plugin)
@@ -40,8 +35,6 @@ public sealed class MainWindow : Window, IDisposable
             MinimumSize = new Vector2(235, 80),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
-
-        normalWindowFlags = Flags;
 
         this.plugin = plugin;
         playersOnly = plugin.Configuration.PlayersOnly;
@@ -58,7 +51,6 @@ public sealed class MainWindow : Window, IDisposable
     /// <inheritdoc />
     public override void Draw()
     {
-        ApplyCurrentWindowSizing();
         DrawCompactHeader();
 
         // Keep sweeping newly loaded candidates while isolation is active. This is what
@@ -67,12 +59,6 @@ public sealed class MainWindow : Window, IDisposable
         {
             var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets);
             plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
-        }
-
-        if (miniMode)
-        {
-            DrawMiniToolbar();
-            return;
         }
 
         DrawToolbar();
@@ -89,78 +75,15 @@ public sealed class MainWindow : Window, IDisposable
         DrawActorTable(actors);
     }
 
-    /// <summary>Applies the current layout sizing policy.</summary>
-    /// <remarks>
-    /// Mini mode should be a real floating command bar, but it must still be
-    /// user-resizable. We therefore resize only once when entering mini mode. When
-    /// returning to full mode, the window restores the last full-size dimensions the
-    /// user had before collapsing.
-    /// </remarks>
-    private void ApplyCurrentWindowSizing()
-    {
-        Flags = miniMode
-            ? normalWindowFlags | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse
-            : normalWindowFlags;
-
-        SizeConstraints = new WindowSizeConstraints
-        {
-            MinimumSize = miniMode
-                ? new Vector2(250, 72)
-                : new Vector2(235, 80),
-            MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
-        };
-
-        if (resizeMiniNextFrame)
-        {
-            resizeMiniNextFrame = false;
-            ImGui.SetWindowSize(new Vector2(270, 74) * ImGuiHelpers.GlobalScale, ImGuiCond.Always);
-            return;
-        }
-
-        if (resizeFullNextFrame)
-        {
-            resizeFullNextFrame = false;
-            ImGui.SetWindowSize(lastFullWindowSize, ImGuiCond.Always);
-            return;
-        }
-
-        if (!miniMode)
-        {
-            var currentSize = ImGui.GetWindowSize();
-            if (currentSize.X > 0 && currentSize.Y > 0)
-                lastFullWindowSize = currentSize;
-        }
-    }
-
     /// <summary>Draws the title/status area.</summary>
     private void DrawCompactHeader()
     {
-        if (miniMode)
-        {
-            DrawMiniStatusLine();
-            return;
-        }
-
         var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
         ImGui.TextUnformatted($"Gpose Cast · {gposeText}");
 
         var statusText = BuildFullStatusText();
         if (string.IsNullOrWhiteSpace(statusText))
             return;
-
-        if (plugin.Visibility.IsIsolationActive)
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), statusText);
-        else
-            ImGui.TextDisabled(statusText);
-    }
-
-    /// <summary>Draws a single short mini-mode status line that avoids text wrapping.</summary>
-    private void DrawMiniStatusLine()
-    {
-        var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
-        var statusText = plugin.Visibility.IsIsolationActive
-            ? $"{gposeText} · ON {plugin.Visibility.HiddenCount}H / {plugin.CastGroup.PickedActors.Count}V"
-            : $"{gposeText} · Ready";
 
         if (plugin.Visibility.IsIsolationActive)
             ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), statusText);
@@ -218,41 +141,6 @@ public sealed class MainWindow : Window, IDisposable
                 plugin.Visibility.StopIsolation();
         }
         DrawTooltip("Restore every actor hidden by Gpose Cast");
-
-        ImGui.SameLine();
-        if (ImGui.SmallButton("Mini"))
-        {
-            var currentSize = ImGui.GetWindowSize();
-            if (currentSize.X > 0 && currentSize.Y > 0)
-                lastFullWindowSize = currentSize;
-
-            miniMode = true;
-            resizeMiniNextFrame = true;
-        }
-        DrawTooltip("Collapse to a tiny control panel");
-    }
-
-    /// <summary>Draws the collapsed GPose control bar used after a group is prepared.</summary>
-    private void DrawMiniToolbar()
-    {
-        if (ImGui.SmallButton("Full"))
-        {
-            miniMode = false;
-            resizeFullNextFrame = true;
-        }
-        DrawTooltip("Expand Gpose Cast");
-
-        ImGui.SameLine();
-        DrawIsolationButton();
-
-        ImGui.SameLine();
-        using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0))
-        {
-            if (ImGui.SmallButton($"Restore##mini-restore"))
-                plugin.Visibility.StopIsolation();
-        }
-        DrawTooltip("Restore every actor hidden by Gpose Cast");
-
     }
 
     /// <summary>Draws the isolate/stop button with its safety disabled state.</summary>
