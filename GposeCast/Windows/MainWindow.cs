@@ -31,7 +31,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(250, 390),
+            MinimumSize = new Vector2(235, 300),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
 
@@ -66,7 +66,8 @@ public sealed class MainWindow : Window, IDisposable
             plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
         }
 
-        var pickedHeight = MathF.Max(82f * ImGuiHelpers.GlobalScale, ImGui.GetContentRegionAvail().Y * 0.22f);
+        var pickedRows = Math.Clamp(plugin.CastGroup.PickedActors.Count, 1, 6);
+        var pickedHeight = (44f + pickedRows * 22f) * ImGuiHelpers.GlobalScale;
         DrawPickedGroup(pickedHeight);
         ImGui.Spacing();
         DrawActorTable(actors);
@@ -77,8 +78,10 @@ public sealed class MainWindow : Window, IDisposable
     {
         var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
         var statusText = plugin.Visibility.IsIsolationActive
-            ? $"Isolation: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} picked"
-            : plugin.GposeImport.LastImportStatus;
+            ? $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} kept"
+            : string.IsNullOrWhiteSpace(plugin.GposeImport.LastImportStatus)
+                ? "Ready"
+                : plugin.GposeImport.LastImportStatus;
 
         ImGui.TextUnformatted($"Gpose Cast · {gposeText}");
         if (string.IsNullOrWhiteSpace(statusText))
@@ -240,9 +243,9 @@ public sealed class MainWindow : Window, IDisposable
         if (!table.Success)
             return;
 
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 68f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 45f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 34f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 45f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableHeadersRow();
 
@@ -272,7 +275,7 @@ public sealed class MainWindow : Window, IDisposable
         DrawState(actor, alreadyPicked, alreadyHidden);
     }
 
-    /// <summary>Draws the +, H, and R action buttons for one actor row.</summary>
+    /// <summary>Draws the compact add/import button and one visibility toggle for one actor row.</summary>
     private void DrawActorActions(ActorEntry actor, bool alreadyPicked, bool alreadyHidden, bool canImport)
     {
         if (actor.IsGposeActor || !canImport)
@@ -281,10 +284,7 @@ public sealed class MainWindow : Window, IDisposable
             DrawImportAndAddButton(actor, alreadyPicked);
 
         ImGui.SameLine();
-        DrawHideButton(actor, alreadyHidden);
-
-        ImGui.SameLine();
-        DrawRestoreButton(actor, alreadyHidden);
+        DrawVisibilityToggle(actor, alreadyHidden);
     }
 
     /// <summary>Draws a plain add button for actors already available to GPose.</summary>
@@ -314,32 +314,29 @@ public sealed class MainWindow : Window, IDisposable
         DrawTooltip("Import to GPose and add to picked group");
     }
 
-    /// <summary>Draws the manual hide-test button.</summary>
-    private void DrawHideButton(ActorEntry actor, bool alreadyHidden)
+    /// <summary>Draws one Brio-style visibility toggle for manual hide/restore.
+    /// The button uses a compact eye glyph when visible and a restore glyph when hidden.
+    /// </summary>
+    private void DrawVisibilityToggle(ActorEntry actor, bool alreadyHidden)
     {
-        var hideDisabled = actor.IsLocalPlayer || alreadyHidden || !plugin.GposeState.IsInGpose;
-        using (ImRaii.Disabled(hideDisabled))
+        var disabled = actor.IsLocalPlayer || !plugin.GposeState.IsInGpose;
+        var label = alreadyHidden ? "↺" : "👁";
+        var action = alreadyHidden ? "Restore actor" : "Hide actor";
+
+        using (ImRaii.Disabled(disabled))
         {
-            if (ImGui.SmallButton($"H##hide-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}"))
+            if (ImGui.SmallButton($"{label}##vis-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}"))
             {
-                plugin.Visibility.HideTest(actor);
+                if (alreadyHidden)
+                    plugin.Visibility.Restore(actor.Key);
+                else
+                    plugin.Visibility.HideTest(actor);
+
                 selectedActorKey = actor.Key;
             }
         }
 
-        DrawTooltip("Hide actor");
-    }
-
-    /// <summary>Draws the manual restore button.</summary>
-    private void DrawRestoreButton(ActorEntry actor, bool alreadyHidden)
-    {
-        using (ImRaii.Disabled(!alreadyHidden))
-        {
-            if (ImGui.SmallButton($"R##restore-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}"))
-                plugin.Visibility.Restore(actor.Key);
-        }
-
-        DrawTooltip("Restore actor");
+        DrawTooltip(actor.IsLocalPlayer ? "Self is always kept visible" : action);
     }
 
     /// <summary>Draws the actor name, with special styling for unloaded picked actors.</summary>
@@ -385,13 +382,13 @@ public sealed class MainWindow : Window, IDisposable
     private static void DrawState(ActorEntry actor, bool alreadyPicked, bool alreadyHidden)
     {
         if (alreadyHidden)
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), "hide");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), "hidden");
         else if (alreadyPicked)
-            ImGui.TextColored(new Vector4(0.4f, 1f, 0.6f, 1f), "pick");
+            ImGui.TextColored(new Vector4(0.4f, 1f, 0.6f, 1f), "kept");
         else if (!actor.IsTargetable)
             ImGui.TextDisabled("no");
         else
-            ImGui.TextDisabled("vis");
+            ImGui.TextDisabled(string.Empty);
     }
 
     /// <summary>Adds the local player to the picked group.</summary>

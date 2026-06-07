@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.4
+
+- Replaced separate H/R actor buttons with one compact visibility toggle.
+- Shortened the picked-group panel so it no longer wastes vertical GPose space.
+- Updated isolation labels from picked/hide to kept/hidden wording.
+- Tightened compact actor table columns for a smaller GPose footprint.
+
 ## 0.7.3
 
 - Prevented `/gposecast` and the main UI shortcut from opening the workspace outside GPose.
