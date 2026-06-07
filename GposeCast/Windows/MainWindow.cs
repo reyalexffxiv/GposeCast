@@ -25,6 +25,7 @@ public sealed class MainWindow : Window, IDisposable
     private bool playersOnly;
     private bool includeUnnamed;
     private ActorKey? selectedActorKey;
+    private bool miniMode;
 
     /// <summary>Creates the main compact workflow window.</summary>
     public MainWindow(Plugin plugin)
@@ -52,12 +53,6 @@ public sealed class MainWindow : Window, IDisposable
     public override void Draw()
     {
         DrawCompactHeader();
-        DrawToolbar();
-        DrawFilters();
-
-        // Refresh the compact list every frame. Object-table reads are cheap and keep the
-        // window accurate as actors load/unload during busy outdoor GPose sessions.
-        var actors = plugin.ActorScanner.Scan(searchText, playersOnly, includeUnnamed);
 
         // Keep sweeping newly loaded candidates while isolation is active. This is what
         // makes late arrivals disappear after the picked group has already been isolated.
@@ -67,8 +62,21 @@ public sealed class MainWindow : Window, IDisposable
             plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
         }
 
+        if (miniMode)
+        {
+            DrawMiniToolbar();
+            return;
+        }
+
+        DrawToolbar();
+        DrawFilters();
+
+        // Refresh the compact list every frame. Object-table reads are cheap and keep the
+        // window accurate as actors load/unload during busy outdoor GPose sessions.
+        var actors = plugin.ActorScanner.Scan(searchText, playersOnly, includeUnnamed);
+
         var pickedRows = Math.Clamp(plugin.CastGroup.PickedActors.Count, 1, 6);
-        var pickedHeight = (44f + pickedRows * 22f) * ImGuiHelpers.GlobalScale;
+        var pickedHeight = (24f + pickedRows * 22f) * ImGuiHelpers.GlobalScale;
         DrawPickedGroup(pickedHeight);
         ImGui.Spacing();
         DrawActorTable(actors);
@@ -79,7 +87,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         var gposeText = plugin.GposeState.IsInGpose ? "GPose" : "World";
         var statusText = plugin.Visibility.IsIsolationActive
-            ? $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} kept"
+            ? $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible"
             : string.IsNullOrWhiteSpace(plugin.GposeImport.LastImportStatus)
                 ? "Ready"
                 : plugin.GposeImport.LastImportStatus;
@@ -102,12 +110,12 @@ public sealed class MainWindow : Window, IDisposable
         DrawTooltip("Settings");
 
         ImGui.SameLine();
-        if (ImGui.SmallButton("+Self"))
+        if (ImGui.SmallButton("Self"))
             AddSelf();
         DrawTooltip("Add yourself to the picked group");
 
         ImGui.SameLine();
-        if (ImGui.SmallButton("+Target"))
+        if (ImGui.SmallButton("Target"))
             AddCurrentTarget();
         DrawTooltip("Add your current GPose/world target");
 
@@ -132,6 +140,32 @@ public sealed class MainWindow : Window, IDisposable
                 plugin.Visibility.StopIsolation();
         }
         DrawTooltip("Restore every actor hidden by Gpose Cast");
+
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Mini"))
+            miniMode = true;
+        DrawTooltip("Collapse to a tiny control panel");
+    }
+
+    /// <summary>Draws the collapsed GPose control bar used after a group is prepared.</summary>
+    private void DrawMiniToolbar()
+    {
+        if (ImGui.SmallButton("Full"))
+            miniMode = false;
+        DrawTooltip("Expand Gpose Cast");
+
+        ImGui.SameLine();
+        DrawIsolationButton();
+
+        ImGui.SameLine();
+        using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0))
+        {
+            if (ImGui.SmallButton($"Restore ({plugin.Visibility.HiddenCount})"))
+                plugin.Visibility.StopIsolation();
+        }
+        DrawTooltip("Restore every actor hidden by Gpose Cast");
+
+        ImGui.TextDisabled($"Picked: {plugin.CastGroup.PickedActors.Count}");
     }
 
     /// <summary>Draws the isolate/stop button with its safety disabled state.</summary>
@@ -167,7 +201,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputTextWithHint("##GposeCastSearch", "Search actor name...", ref searchText, 128);
 
-        if (ImGui.Checkbox("Players", ref playersOnly))
+        if (ImGui.Checkbox("Players only", ref playersOnly))
         {
             plugin.Configuration.PlayersOnly = playersOnly;
             plugin.Configuration.Save();
@@ -198,13 +232,12 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
-        using var table = ImRaii.Table("PickedGroupTableCompact", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable);
+        using var table = ImRaii.Table("PickedGroupTableCompact", 2, ImGuiTableFlags.RowBg);
         if (!table.Success)
             return;
 
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 24f * ImGuiHelpers.GlobalScale);
-        ImGui.TableHeadersRow();
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 22f * ImGuiHelpers.GlobalScale);
 
         foreach (var picked in OrderedPickedActors())
         {
@@ -244,9 +277,9 @@ public sealed class MainWindow : Window, IDisposable
         if (!table.Success)
             return;
 
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 42f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 44f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 45f * ImGuiHelpers.GlobalScale);
+        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 48f * ImGuiHelpers.GlobalScale);
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableHeadersRow();
 
@@ -270,6 +303,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TableNextColumn();
         if (ImGui.Selectable($"{actor.DisplayName}##select-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}", isSelected, ImGuiSelectableFlags.SpanAllColumns))
             selectedActorKey = actor.Key;
+        DrawSourceTooltip(actor);
         DrawActorBadges(actor);
 
         ImGui.TableNextColumn();
@@ -362,12 +396,20 @@ public sealed class MainWindow : Window, IDisposable
         }
     }
 
-    /// <summary>Draws compact source/type badges beside an actor name.</summary>
+    /// <summary>Shows actor source/type diagnostics as a tooltip instead of cluttering the row.</summary>
+    private static void DrawSourceTooltip(ActorEntry actor)
+    {
+        if (!ImGui.IsItemHovered())
+            return;
+
+        var source = actor.IsGposeActor ? "GPose actor" : "World actor";
+        var kind = actor.IsCompanionLike ? "pet/minion" : actor.IsNpcLike ? "NPC" : actor.ObjectKind.ToString();
+        ImGui.SetTooltip($"{source} · {kind}");
+    }
+
+    /// <summary>Draws compact type badges beside an actor name.</summary>
     private static void DrawActorBadges(ActorEntry actor)
     {
-        ImGui.SameLine();
-        ImGui.TextDisabled(actor.IsGposeActor ? "G" : "W");
-
         if (actor.IsCompanionLike)
         {
             ImGui.SameLine();
@@ -392,7 +434,7 @@ public sealed class MainWindow : Window, IDisposable
         if (alreadyHidden)
             ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f), "hidden");
         else if (alreadyPicked)
-            ImGui.TextColored(new Vector4(0.4f, 1f, 0.6f, 1f), "kept");
+            ImGui.TextColored(new Vector4(0.4f, 1f, 0.6f, 1f), "visible");
         else if (!actor.IsTargetable)
             ImGui.TextDisabled("no");
         else

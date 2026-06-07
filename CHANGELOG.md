@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.6
+- Added a compact mini mode for shooting after isolation is prepared.
+- Removed GPose/World debug letters from actor rows and moved source details into tooltips.
+- Changed row state from kept/hidden to visible/hidden.
+- Tightened picked group layout and removed its table header.
+- Renamed the main filter checkbox to Players only.
+
 ## 0.7.4
 
 - Replaced separate H/R actor buttons with one compact visibility toggle.
