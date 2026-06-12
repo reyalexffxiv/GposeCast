@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 
 namespace GposeCast.Windows;
@@ -15,7 +16,7 @@ public sealed class ConfigWindow : Window, IDisposable
     /// <summary>Creates the configuration window.</summary>
     public ConfigWindow(Plugin plugin) : base("Gpose Cast Settings###GposeCastConfig")
     {
-        Size = new Vector2(360, 250);
+        Size = new Vector2(390, 280);
         SizeCondition = ImGuiCond.FirstUseEver;
         configuration = plugin.Configuration;
     }
@@ -33,11 +34,22 @@ public sealed class ConfigWindow : Window, IDisposable
         DrawCheckbox("Include unnamed actors", nameof(Configuration.IncludeUnnamed), configuration.IncludeUnnamed, value => configuration.IncludeUnnamed = value);
         ImGui.Spacing();
         DrawCheckbox("Keep self visible", nameof(Configuration.KeepSelfVisible), configuration.KeepSelfVisible, value => configuration.KeepSelfVisible = value);
-        DrawCheckbox("Hide NPCs", nameof(Configuration.HideNpcs), configuration.HideNpcs, value => configuration.HideNpcs = value);
-        DrawCheckbox("Hide minions and pets", nameof(Configuration.HideMinionsAndPets), configuration.HideMinionsAndPets, value => configuration.HideMinionsAndPets = value);
         DrawCheckbox("Auto-hide new arrivals", nameof(Configuration.AutoHideNewArrivals), configuration.AutoHideNewArrivals, value => configuration.AutoHideNewArrivals = value);
         DrawCheckbox("Auto-open in GPose", nameof(Configuration.AutoOpenInGpose), configuration.AutoOpenInGpose, value => configuration.AutoOpenInGpose = value);
         DrawCheckbox("Show peepo mascot", nameof(Configuration.ShowMascot), configuration.ShowMascot, value => configuration.ShowMascot = value);
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.TextColored(new Vector4(1f, 0.75f, 0.35f, 1f), "Experimental non-player hiding");
+        ImGui.TextWrapped("After game updates, NPC/pet/event-object hiding can be unsafe because it writes native actor visibility. Player hiding stays enabled by default.");
+
+        DrawCheckbox("Allow experimental NPC/pet hiding", nameof(Configuration.AllowExperimentalNonPlayerHiding), configuration.AllowExperimentalNonPlayerHiding, value => configuration.AllowExperimentalNonPlayerHiding = value);
+
+        using (ImRaii.Disabled(!configuration.AllowExperimentalNonPlayerHiding))
+        {
+            DrawCheckbox("Hide NPCs", nameof(Configuration.HideNpcs), configuration.HideNpcs, value => configuration.HideNpcs = value);
+            DrawCheckbox("Hide minions and pets", nameof(Configuration.HideMinionsAndPets), configuration.HideMinionsAndPets, value => configuration.HideMinionsAndPets = value);
+        }
     }
 
     /// <summary>Draws a persisted checkbox and saves immediately when it changes.</summary>

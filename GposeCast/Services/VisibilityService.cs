@@ -18,12 +18,14 @@ public sealed class VisibilityService
     private const float HiddenAlpha = 0.0f;
 
     private readonly ActorScannerService actorScanner;
+    private readonly Configuration configuration;
     private readonly Dictionary<ActorKey, HiddenActorState> hiddenActors = new();
 
     /// <summary>Creates a visibility service backed by the scanner for live actor lookup.</summary>
-    public VisibilityService(ActorScannerService actorScanner)
+    public VisibilityService(ActorScannerService actorScanner, Configuration configuration)
     {
         this.actorScanner = actorScanner;
+        this.configuration = configuration;
     }
 
     /// <summary>Number of actors currently tracked as hidden by this plugin.</summary>
@@ -109,6 +111,12 @@ public sealed class VisibilityService
             return false;
         }
 
+        if (!CanAlphaHide(live))
+        {
+            Plugin.Log.Debug($"Gpose Cast: skipped non-player alpha hide for {live.DisplayName} ({live.ObjectKind}).");
+            return false;
+        }
+
         if (hiddenActors.ContainsKey(live.Key))
             return true;
 
@@ -123,7 +131,10 @@ public sealed class VisibilityService
                 native->Alpha = HiddenAlpha;
             }
 
-            Plugin.Log.Information($"Gpose Cast: {reason} applied to {live.DisplayName}.");
+            // Avoid per-frame log spam while isolation repeatedly enforces itself in busy areas.
+            if (reason != "group isolation")
+                Plugin.Log.Information($"Gpose Cast: {reason} applied to {live.DisplayName}.");
+
             return true;
         }
         catch (Exception ex)
@@ -150,6 +161,13 @@ public sealed class VisibilityService
 
         try
         {
+            if (!CanAlphaHide(live))
+            {
+                hiddenActors.Remove(key);
+                Plugin.Log.Warning($"Gpose Cast: skipped restore for {state.Name} because its current actor type is no longer safe to write.");
+                return false;
+            }
+
             unsafe
             {
                 var native = (NativeCharacter*)live.Address;
@@ -165,6 +183,18 @@ public sealed class VisibilityService
             Plugin.Log.Error(ex, $"Gpose Cast: failed to restore {state.Name}.");
             return false;
         }
+    }
+
+    /// <summary>Returns true when native alpha writes are allowed for this actor.</summary>
+    private bool CanAlphaHide(ActorEntry actor)
+    {
+        if (actor.IsLocalPlayer)
+            return false;
+
+        // Player characters are the stable/core path. Non-player entries are kept behind
+        // an explicit experimental switch because FFXIV updates can change native layouts
+        // for pets, NPCs, event objects, and other object-table entries.
+        return actor.IsPlayerCharacter || configuration.AllowExperimentalNonPlayerHiding;
     }
 
     /// <summary>Restores all actors hidden by the plugin.</summary>

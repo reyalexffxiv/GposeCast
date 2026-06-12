@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.9
+- Added an emergency safety guard after an FFXIV update crash when isolating outdoors.
+- Player hiding remains the default isolation path.
+- NPC, pet, minion, and event-object hiding now require an explicit experimental opt-in.
+- Older configs are migrated to disable experimental non-player hiding by default.
+- Reduced isolation log spam during repeated enforcement.
+
 ## 0.8.8
 - Micro-nudged the peepo mascot slightly left and up for cleaner filter-row alignment.
 

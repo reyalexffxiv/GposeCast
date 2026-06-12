@@ -56,10 +56,11 @@ public sealed class Plugin : IDalamudPlugin
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        Configuration.MigrateIfNeeded();
         GposeState = new GposeStateService(ClientState);
         ActorScanner = new ActorScannerService(ObjectTable, ClientState);
         CastGroup = new CastGroupService();
-        Visibility = new VisibilityService(ActorScanner);
+        Visibility = new VisibilityService(ActorScanner, Configuration);
         GposeImport = new GposeImportService(ClientState, ObjectTable, Framework, ActorScanner);
 
         ConfigWindow = new ConfigWindow(this);
@@ -85,7 +86,7 @@ public sealed class Plugin : IDalamudPlugin
         if (Configuration.AutoOpenInGpose && GposeState.IsInGpose)
             MainWindow.IsOpen = true;
 
-        Log.Information("Gpose Cast loaded. Actor isolation/import enabled; VFX suppression is deferred to a future version.");
+        Log.Information("Gpose Cast loaded. Player isolation/import enabled; NPC/pet hiding is experimental after game updates.");
     }
 
     /// <summary>

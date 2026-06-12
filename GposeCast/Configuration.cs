@@ -10,7 +10,7 @@ namespace GposeCast;
 public class Configuration : IPluginConfiguration
 {
     /// <summary>Dalamud configuration schema version.</summary>
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     /// <summary>Default state for the compact actor list's player filter.</summary>
     public bool PlayersOnly { get; set; } = true;
@@ -27,11 +27,14 @@ public class Configuration : IPluginConfiguration
     /// <summary>Legacy field kept so old config files deserialize safely.</summary>
     public bool KeepNpcsVisible { get; set; } = true;
 
-    /// <summary>Whether isolation should hide NPC/event/enemy-like entries.</summary>
-    public bool HideNpcs { get; set; } = true;
+    /// <summary>Whether isolation should hide NPC/event/enemy-like entries. Experimental after game updates.</summary>
+    public bool HideNpcs { get; set; } = false;
 
-    /// <summary>Whether isolation should hide pets, minions, mounts, and ornaments.</summary>
-    public bool HideMinionsAndPets { get; set; } = true;
+    /// <summary>Whether isolation should hide pets, minions, mounts, and ornaments. Experimental after game updates.</summary>
+    public bool HideMinionsAndPets { get; set; } = false;
+
+    /// <summary>Allows non-player alpha writes for NPCs, pets, minions, and other character-like objects.</summary>
+    public bool AllowExperimentalNonPlayerHiding { get; set; } = false;
 
     /// <summary>Whether isolation should keep enforcing itself as actors load in.</summary>
     public bool AutoHideNewArrivals { get; set; } = true;
@@ -44,6 +47,25 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>Legacy field kept so old config files deserialize safely. Gpose Cast now always closes the main window when GPose ends.</summary>
     public bool AutoCloseWhenLeavingGpose { get; set; } = true;
+
+    /// <summary>
+    /// Applies one-time safety migrations when loading older configuration files.
+    /// </summary>
+    public void MigrateIfNeeded()
+    {
+        if (Version >= 2)
+            return;
+
+        // After FFXIV client updates, writing alpha to broad NPC/pet/object entries can
+        // become unsafe if native layouts shift. Keep existing users on the stable
+        // players-only isolation path until they explicitly opt back into experimental
+        // non-player hiding.
+        HideNpcs = false;
+        HideMinionsAndPets = false;
+        AllowExperimentalNonPlayerHiding = false;
+        Version = 2;
+        Save();
+    }
 
     /// <summary>Saves the current configuration using Dalamud's plugin config store.</summary>
     public void Save()

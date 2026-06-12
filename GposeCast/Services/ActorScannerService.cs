@@ -76,7 +76,7 @@ public sealed class ActorScannerService
     /// <summary>
     /// Scans the full object table for entries that isolation should consider hiding.
     /// </summary>
-    public IReadOnlyList<ActorEntry> ScanIsolationCandidates(bool hideNpcs, bool hideMinionsAndPets)
+    public IReadOnlyList<ActorEntry> ScanIsolationCandidates(bool hideNpcs, bool hideMinionsAndPets, bool allowExperimentalNonPlayerHiding)
     {
         var localPlayer = objectTable.LocalPlayer;
         var localPosition = localPlayer?.Position ?? Vector3.Zero;
@@ -91,8 +91,8 @@ public sealed class ActorScannerService
             // Never apply the UI's unnamed filter here. Many visible pets/minions/NPCs
             // have blank names while in GPose and still need to be hidden.
             .Where(entry => entry.IsPlayerCharacter
-                || (hideMinionsAndPets && entry.IsCompanionLike)
-                || (hideNpcs && entry.IsNpcLike))
+                || (allowExperimentalNonPlayerHiding && hideMinionsAndPets && entry.IsCompanionLike)
+                || (allowExperimentalNonPlayerHiding && hideNpcs && entry.IsNpcLike))
             .OrderBy(entry => entry.Distance)
             .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -294,6 +294,7 @@ public sealed class ActorScannerService
     /// <summary>
     /// Detects NPC-like actors. This intentionally includes event objects because some
     /// city NPCs and background non-controlled characters surface through those kinds.
+    /// These are not hidden unless the user explicitly enables experimental non-player hiding.
     /// </summary>
     private static bool IsNpcLike(IGameObject actor)
     {

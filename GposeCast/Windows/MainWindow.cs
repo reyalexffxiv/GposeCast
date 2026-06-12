@@ -74,7 +74,7 @@ public sealed class MainWindow : Window, IDisposable
         // makes late arrivals disappear after the picked group has already been isolated.
         if (plugin.Visibility.IsIsolationActive && plugin.Configuration.AutoHideNewArrivals)
         {
-            var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets);
+            var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets, plugin.Configuration.AllowExperimentalNonPlayerHiding);
             plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
         }
 
@@ -238,13 +238,15 @@ public sealed class MainWindow : Window, IDisposable
                 return;
             }
 
-            var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets);
+            var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets, plugin.Configuration.AllowExperimentalNonPlayerHiding);
             plugin.Visibility.StartIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
         }
 
         DrawTooltip(plugin.Visibility.IsIsolationActive
             ? "Stop isolation and restore hidden actors"
-            : "Hide everyone except picked actors");
+            : plugin.Configuration.AllowExperimentalNonPlayerHiding
+                ? "Hide everyone except picked actors, including enabled experimental NPC/pet categories"
+                : "Hide non-picked players. NPC/pet hiding is experimental and disabled by default.");
     }
 
     /// <summary>Draws search and list filter controls.</summary>
@@ -408,7 +410,9 @@ public sealed class MainWindow : Window, IDisposable
     /// <summary>Draws one Brio-style visibility toggle for manual hide/restore.</summary>
     private void DrawVisibilityToggle(ActorEntry actor, bool alreadyHidden)
     {
-        var disabled = actor.IsLocalPlayer || !plugin.GposeState.IsInGpose;
+        var disabled = actor.IsLocalPlayer
+            || !plugin.GposeState.IsInGpose
+            || (!actor.IsPlayerCharacter && !plugin.Configuration.AllowExperimentalNonPlayerHiding);
         var icon = alreadyHidden ? FontAwesomeIcon.EyeSlash : FontAwesomeIcon.Eye;
         var action = alreadyHidden ? "Restore actor" : "Hide actor";
 
@@ -425,7 +429,11 @@ public sealed class MainWindow : Window, IDisposable
             }
         }
 
-        DrawTooltip(actor.IsLocalPlayer ? "Self is always kept visible" : action);
+        DrawTooltip(actor.IsLocalPlayer
+            ? "Self is always kept visible"
+            : !actor.IsPlayerCharacter && !plugin.Configuration.AllowExperimentalNonPlayerHiding
+                ? "Non-player hiding is experimental and currently disabled"
+                : action);
     }
 
     /// <summary>Draws a compact FontAwesome icon button using Dalamud's icon font.</summary>
