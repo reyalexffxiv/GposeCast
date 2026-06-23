@@ -18,7 +18,7 @@ namespace GposeCast.Services;
 public sealed class VisibilityService
 {
     private const float HiddenAlpha = 0.0f;
-    private const float PickedFashionAccessoryPreserveRadius = 3.0f;
+    private const float PickedFashionAccessoryPreserveRadius = 8.0f;
 
     private readonly ActorScannerService actorScanner;
     private readonly Configuration configuration;
@@ -117,12 +117,33 @@ public sealed class VisibilityService
         if (pickedPlayers.Count == 0)
             return new HashSet<ActorKey>();
 
+        // Imported GPose actors and their original overworld actors can both exist while
+        // isolation is active. Fashion accessories usually remain attached to the original
+        // world actor rather than the imported GPose clone, so use both as protection anchors.
+        var pickedNames = pickedPlayers
+            .Select(actor => actor.DisplayName)
+            .Where(name => !string.IsNullOrWhiteSpace(name) && name != "<unnamed>")
+            .ToHashSet(StringComparer.Ordinal);
+
+        var anchorPositions = pickedPlayers
+            .Select(actor => actor.Position)
+            .Concat(visibleActors
+                .Where(actor => actor.IsPlayerCharacter && pickedNames.Contains(actor.DisplayName))
+                .Select(actor => actor.Position))
+            .Distinct()
+            .ToList();
+
+        if (anchorPositions.Count == 0)
+            return new HashSet<ActorKey>();
+
         var preserveRadiusSquared = PickedFashionAccessoryPreserveRadius * PickedFashionAccessoryPreserveRadius;
         var protectedAccessories = new HashSet<ActorKey>();
 
         foreach (var accessory in visibleActors.Where(actor => actor.IsFashionAccessory && actor.CanNativeAlphaHide))
         {
-            if (pickedPlayers.Any(player => Vector3.DistanceSquared(player.Position, accessory.Position) <= preserveRadiusSquared))
+            // Umbrella/parasol origins can be offset from the player's feet, especially when
+            // modded into large flags, so the radius is intentionally wider than melee range.
+            if (anchorPositions.Any(position => Vector3.DistanceSquared(position, accessory.Position) <= preserveRadiusSquared))
                 protectedAccessories.Add(accessory.Key);
         }
 

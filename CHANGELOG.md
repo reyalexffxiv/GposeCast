@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.9.5
+- Hardens fashion accessory preservation by using both picked GPose clones and matching original world-player actors as protection anchors.
+- Widens the ornament preservation radius so umbrellas, parasols, and large modded flag-style accessories are less likely to be hidden during isolation.
+- Fixes a duplicate isolation log line introduced while testing accessory preservation.
+
 ## 0.8.9.4
 - Preserves nearby ornament/fashion-accessory actors for picked players during isolation.
 - Fixes umbrellas, parasols, and modded ornament-based accessories disappearing when their player is kept visible.
