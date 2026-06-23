@@ -40,10 +40,9 @@ public sealed class ConfigWindow : Window, IDisposable
 
         ImGui.Spacing();
         ImGui.Separator();
-        ImGui.TextColored(new Vector4(1f, 0.75f, 0.35f, 1f), "Experimental non-player hiding");
-        ImGui.TextWrapped("After game updates, NPC/pet/event-object hiding can be unsafe because it writes native actor visibility. Player hiding stays enabled by default.");
+        ImGui.TextColored(new Vector4(1f, 0.75f, 0.35f, 1f), "Optional non-player hiding");
 
-        DrawCheckbox("Allow experimental NPC/pet hiding", nameof(Configuration.AllowExperimentalNonPlayerHiding), configuration.AllowExperimentalNonPlayerHiding, value => configuration.AllowExperimentalNonPlayerHiding = value);
+        DrawCheckbox("Enable optional NPC/pet hiding", nameof(Configuration.AllowExperimentalNonPlayerHiding), configuration.AllowExperimentalNonPlayerHiding, value => configuration.AllowExperimentalNonPlayerHiding = value);
 
         using (ImRaii.Disabled(!configuration.AllowExperimentalNonPlayerHiding))
         {

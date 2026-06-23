@@ -245,8 +245,8 @@ public sealed class MainWindow : Window, IDisposable
         DrawTooltip(plugin.Visibility.IsIsolationActive
             ? "Stop isolation and restore hidden actors"
             : plugin.Configuration.AllowExperimentalNonPlayerHiding
-                ? "Hide everyone except picked actors, including enabled experimental NPC/pet categories"
-                : "Hide non-picked players. NPC/pet hiding is experimental and disabled by default.");
+                ? "Hide everyone except picked actors, including enabled optional NPC/pet categories"
+                : "Hide non-picked players. NPC/pet hiding is optional and disabled by default.");
     }
 
     /// <summary>Draws search and list filter controls.</summary>
@@ -412,7 +412,8 @@ public sealed class MainWindow : Window, IDisposable
     {
         var disabled = actor.IsLocalPlayer
             || !plugin.GposeState.IsInGpose
-            || (!actor.IsPlayerCharacter && !plugin.Configuration.AllowExperimentalNonPlayerHiding);
+            || (!actor.IsPlayerCharacter && !plugin.Configuration.AllowExperimentalNonPlayerHiding)
+            || !actor.CanNativeAlphaHide;
         var icon = alreadyHidden ? FontAwesomeIcon.EyeSlash : FontAwesomeIcon.Eye;
         var action = alreadyHidden ? "Restore actor" : "Hide actor";
 
@@ -431,8 +432,10 @@ public sealed class MainWindow : Window, IDisposable
 
         DrawTooltip(actor.IsLocalPlayer
             ? "Self is always kept visible"
+            : !actor.CanNativeAlphaHide
+                ? "This object is not a supported hide actor"
             : !actor.IsPlayerCharacter && !plugin.Configuration.AllowExperimentalNonPlayerHiding
-                ? "Non-player hiding is experimental and currently disabled"
+                ? "Optional non-player hiding is currently disabled"
                 : action);
     }
 

@@ -86,7 +86,7 @@ public sealed class Plugin : IDalamudPlugin
         if (Configuration.AutoOpenInGpose && GposeState.IsInGpose)
             MainWindow.IsOpen = true;
 
-        Log.Information("Gpose Cast loaded. Player isolation/import enabled; NPC/pet hiding is experimental after game updates.");
+        Log.Information("Gpose Cast loaded. Player isolation/import enabled; optional NPC/pet hiding available in settings.");
     }
 
     /// <summary>

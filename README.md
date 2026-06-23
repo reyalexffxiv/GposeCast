@@ -14,7 +14,7 @@ other loaded actors for cleaner screenshots.
 - Imports loaded overworld player actors into GPose using a KtisisPyon-style local GPose actor spawn path.
 - Builds a session-only picked group.
 - Isolates the picked group by setting non-picked actors' local alpha to zero.
-- Can include players, NPC-like actors, minions, pets, mounts, ornaments, and event-object-like entries in the hide sweep.
+- Can optionally include supported NPC-like actors, minions, pets, mounts, and ornaments in the hide sweep.
 - Restores hidden actors when isolation stops, GPose ends, or the plugin unloads.
 
 ## Command

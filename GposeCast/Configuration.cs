@@ -27,13 +27,13 @@ public class Configuration : IPluginConfiguration
     /// <summary>Legacy field kept so old config files deserialize safely.</summary>
     public bool KeepNpcsVisible { get; set; } = true;
 
-    /// <summary>Whether isolation should hide NPC/event/enemy-like entries. Experimental after game updates.</summary>
+    /// <summary>Whether isolation should hide supported NPC/enemy-like character entries.</summary>
     public bool HideNpcs { get; set; } = false;
 
-    /// <summary>Whether isolation should hide pets, minions, mounts, and ornaments. Experimental after game updates.</summary>
+    /// <summary>Whether isolation should hide supported pets, minions, mounts, and ornaments.</summary>
     public bool HideMinionsAndPets { get; set; } = false;
 
-    /// <summary>Allows non-player alpha writes for NPCs, pets, minions, and other character-like objects.</summary>
+    /// <summary>Allows optional non-player alpha writes for supported character-like objects.</summary>
     public bool AllowExperimentalNonPlayerHiding { get; set; } = false;
 
     /// <summary>Whether isolation should keep enforcing itself as actors load in.</summary>
@@ -56,10 +56,8 @@ public class Configuration : IPluginConfiguration
         if (Version >= 2)
             return;
 
-        // After FFXIV client updates, writing alpha to broad NPC/pet/object entries can
-        // become unsafe if native layouts shift. Keep existing users on the stable
-        // players-only isolation path until they explicitly opt back into experimental
-        // non-player hiding.
+        // Keep existing users on the stable players-only isolation path until they
+        // explicitly opt back into optional non-player hiding.
         HideNpcs = false;
         HideMinionsAndPets = false;
         AllowExperimentalNonPlayerHiding = false;

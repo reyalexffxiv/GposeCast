@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Dalamud.Game.ClientState.Objects.Enums;
 using GposeCast.Models;
 using NativeCharacter = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
 
@@ -104,7 +105,7 @@ public sealed class VisibilityService
             return false;
         }
 
-        var live = actorScanner.FindAnyCurrent(actor.Key);
+        var live = actorScanner.FindAnyCurrent(actor.Key, actor.Name, actor.ObjectKind);
         if (live is null || live.Address == nint.Zero)
         {
             Plugin.Log.Warning("Gpose Cast: actor is not currently loaded, cannot hide.");
@@ -127,7 +128,7 @@ public sealed class VisibilityService
                 var native = (NativeCharacter*)live.Address;
                 var originalAlpha = native->Alpha;
 
-                hiddenActors[live.Key] = new HiddenActorState(live.Key, live.DisplayName, originalAlpha);
+                hiddenActors[live.Key] = new HiddenActorState(live.Key, live.Name, live.ObjectKind, originalAlpha);
                 native->Alpha = HiddenAlpha;
             }
 
@@ -151,7 +152,7 @@ public sealed class VisibilityService
         if (!hiddenActors.TryGetValue(key, out var state))
             return false;
 
-        var live = actorScanner.FindAnyCurrent(key);
+        var live = actorScanner.FindAnyCurrent(key, state.Name, state.ObjectKind);
         if (live is null || live.Address == nint.Zero)
         {
             Plugin.Log.Warning($"Gpose Cast: cannot restore {state.Name}, actor is not currently loaded.");
@@ -164,7 +165,7 @@ public sealed class VisibilityService
             if (!CanRestoreAlpha(live))
             {
                 hiddenActors.Remove(key);
-                Plugin.Log.Warning($"Gpose Cast: skipped restore for {state.Name} because the current actor resolves to the local player.");
+                Plugin.Log.Warning($"Gpose Cast: skipped restore for {state.Name} because the current actor is not a supported restore target.");
                 return false;
             }
 
@@ -191,19 +192,22 @@ public sealed class VisibilityService
         if (actor.IsLocalPlayer)
             return false;
 
-        // Player characters are the stable/core path. Non-player entries are kept behind
-        // an explicit experimental switch because FFXIV updates can change native layouts
-        // for pets, NPCs, event objects, and other object-table entries.
-        return actor.IsPlayerCharacter || configuration.AllowExperimentalNonPlayerHiding;
+        if (!actor.CanNativeAlphaHide)
+            return false;
+
+        // Player characters are the stable/core path. Optional non-player hiding only
+        // applies to character-like NPCs, companions, minions, mounts, and ornaments.
+        return actor.IsPlayerCharacter
+            || (configuration.AllowExperimentalNonPlayerHiding && (actor.IsNpcLike || actor.IsCompanionLike));
     }
 
     /// <summary>Returns true when restoring alpha is allowed for an actor already hidden by this plugin.</summary>
     private static bool CanRestoreAlpha(ActorEntry actor)
     {
-        // Restore must not depend on the current experimental-hiding toggle. If the user
-        // hid a non-player actor while the toggle was enabled and later disables it, the
-        // plugin must still be allowed to undo its own alpha write.
-        return !actor.IsLocalPlayer;
+        // Restore must not depend on the current optional-hiding toggle. If the user hid
+        // a non-player actor while the toggle was enabled and later disables it, the plugin
+        // must still be allowed to undo its own alpha write.
+        return !actor.IsLocalPlayer && actor.CanNativeAlphaHide;
     }
 
     /// <summary>Restores all actors hidden by the plugin.</summary>
@@ -216,5 +220,5 @@ public sealed class VisibilityService
     }
 
     /// <summary>Original alpha state for one hidden actor.</summary>
-    private readonly record struct HiddenActorState(ActorKey Key, string Name, float OriginalAlpha);
+    private readonly record struct HiddenActorState(ActorKey Key, string Name, ObjectKind ObjectKind, float OriginalAlpha);
 }

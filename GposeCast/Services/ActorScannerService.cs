@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using GposeCast.Models;
@@ -86,13 +87,13 @@ public sealed class ActorScannerService
             .Where(IsUsableObject)
             // Isolation must be wider than the compact UI list. Vanilla GPose's
             // non-controlled character filter affects actors outside the usual PC range,
-            // especially city NPCs, pets, and event objects.
+            // especially city NPCs, pets, and minions.
             .Select(actor => ToEntry(actor, localPosition, localPlayer is not null && localKey.Matches(actor)))
             // Never apply the UI's unnamed filter here. Many visible pets/minions/NPCs
             // have blank names while in GPose and still need to be hidden.
             .Where(entry => entry.IsPlayerCharacter
-                || (allowExperimentalNonPlayerHiding && hideMinionsAndPets && entry.IsCompanionLike)
-                || (allowExperimentalNonPlayerHiding && hideNpcs && entry.IsNpcLike))
+                || (allowExperimentalNonPlayerHiding && hideMinionsAndPets && entry.IsCompanionLike && entry.CanNativeAlphaHide)
+                || (allowExperimentalNonPlayerHiding && hideNpcs && entry.IsNpcLike && entry.CanNativeAlphaHide))
             .OrderBy(entry => entry.Distance)
             .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -191,6 +192,26 @@ public sealed class ActorScannerService
     }
 
     /// <summary>
+    /// Finds a current actor anywhere in the object table, requiring loose identity details
+    /// when the lookup falls back to the session-local object index.
+    /// </summary>
+    public ActorEntry? FindAnyCurrent(ActorKey key, string expectedName, ObjectKind expectedKind)
+    {
+        foreach (var actor in objectTable)
+        {
+            if (!IsUsableObject(actor) || !key.Matches(actor, expectedName, expectedKind))
+                continue;
+
+            var localPlayer = objectTable.LocalPlayer;
+            var localPosition = localPlayer?.Position ?? Vector3.Zero;
+            var localKey = localPlayer is null ? default : ActorKey.From(localPlayer);
+            return ToEntry(actor, localPosition, localPlayer is not null && localKey.Matches(actor));
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Checks whether the object wrapper is valid enough to read safely.
     /// </summary>
     private static bool IsUsableObject([NotNullWhen(true)] IGameObject? actor)
@@ -217,6 +238,7 @@ public sealed class ActorScannerService
             IsPlayerCharacter = IsPlayer(actor),
             IsCompanionLike = IsCompanionLike(actor),
             IsNpcLike = IsNpcLike(actor),
+            CanNativeAlphaHide = CanNativeAlphaHide(actor),
             IsGposeActor = IsGposeActor(actor),
             IsOverworldActor = IsOverworldActor(actor),
             Address = actor.Address,
@@ -292,24 +314,20 @@ public sealed class ActorScannerService
     }
 
     /// <summary>
-    /// Detects NPC-like actors. This intentionally includes event objects because some
-    /// city NPCs and background non-controlled characters surface through those kinds.
-    /// These are not hidden unless the user explicitly enables experimental non-player hiding.
+    /// Detects NPC-like character actors. Generic event/world objects are intentionally
+    /// excluded because Gpose Cast's local alpha hide is only applied to character-like wrappers.
     /// </summary>
     private static bool IsNpcLike(IGameObject actor)
     {
         var kind = actor.ObjectKind.ToString();
         return kind.Equals("EventNpc", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("BattleNpc", StringComparison.OrdinalIgnoreCase)
+            || kind.Equals("Retainer", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("Npc", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("BNpc", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("ENpc", StringComparison.OrdinalIgnoreCase)
-            || kind.Equals("EventObj", StringComparison.OrdinalIgnoreCase)
-            || kind.Equals("EventObject", StringComparison.OrdinalIgnoreCase)
-            || kind.Equals("EventObjType", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("EventNpcType", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("BattleNpcType", StringComparison.OrdinalIgnoreCase)
-            || kind.Equals("Object", StringComparison.OrdinalIgnoreCase)
             || kind.Contains("Npc", StringComparison.OrdinalIgnoreCase)
             || kind.Contains("Enemy", StringComparison.OrdinalIgnoreCase);
     }
@@ -326,5 +344,14 @@ public sealed class ActorScannerService
             || kind.Equals("MountType", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("Ornament", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("OrnamentType", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns true only for live character-like wrappers that match Gpose Cast's supported hide categories.
+    /// </summary>
+    private static bool CanNativeAlphaHide(IGameObject actor)
+    {
+        return actor is ICharacter
+            && (IsPlayer(actor) || IsNpcLike(actor) || IsCompanionLike(actor));
     }
 }

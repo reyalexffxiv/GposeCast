@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.9.2
+- Made optional non-player hiding safer without changing the normal player-isolation workflow.
+- Non-player hiding now only alpha-hides supported character-like actors, such as NPCs, minions, pets, mounts, and ornaments.
+- Generic event/world objects are skipped instead of being treated as hide candidates.
+- Restore lookups now guard object-table-index fallback with the original actor kind and name.
+- Simplified settings wording to “Optional non-player hiding”.
+
 ## 0.8.9.1
 - Patch-day version bump for the current FFXIV/Dalamud rebuild.
 - Hardened restore behavior so actors previously hidden by Gpose Cast can still be restored even if experimental non-player hiding is disabled afterward.

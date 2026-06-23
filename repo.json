@@ -3,7 +3,7 @@
     "Author": "Rey Alex",
     "Name": "Gpose Cast",
     "InternalName": "GposeCast",
-    "AssemblyVersion": "0.8.9.1",
+    "AssemblyVersion": "0.8.9.2",
     "Description": "A compact GPose casting tool. Search visible actors, import overworld players into GPose for Brio/Ktisis, build a picked group, and hide everyone else locally for cleaner screenshots.",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
@@ -12,6 +12,6 @@
     "DownloadLinkInstall": "https://raw.githubusercontent.com/reyalexffxiv/GposeCast/master/plugins/GposeCast.zip",
     "DownloadLinkUpdate": "https://raw.githubusercontent.com/reyalexffxiv/GposeCast/master/plugins/GposeCast.zip",
     "DownloadLinkTesting": "https://raw.githubusercontent.com/reyalexffxiv/GposeCast/master/plugins/GposeCast.zip",
-    "Changelog": "Patch-day rebuild pass: version bump, safer restore behavior for previously hidden non-player actors, and guarded release packaging."
+    "Changelog": "Safer optional non-player hiding: only character-like NPC/pet/minion actors are alpha-hidden, generic event/world objects are skipped, and restore lookups are guarded by kind/name when object-table slots are reused."
   }
 ]

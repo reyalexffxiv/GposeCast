@@ -41,6 +41,30 @@ public readonly record struct ActorKey(ulong GameObjectId, uint EntityId, ushort
     }
 
     /// <summary>
+    /// Checks whether the provided live actor still represents this key, requiring kind/name
+    /// guards when matching only by object-table slot.
+    /// </summary>
+    public bool Matches(IGameObject actor, string expectedName, ObjectKind expectedKind)
+    {
+        // Stable ids are enough on their own.
+        if (GameObjectId != 0 && actor.GameObjectId == GameObjectId)
+            return true;
+
+        if (EntityId != 0 && EntityId != 0xE0000000 && actor.EntityId == EntityId)
+            return true;
+
+        if (ObjectIndex != actor.ObjectIndex || actor.Address == nint.Zero)
+            return false;
+
+        if (actor.ObjectKind != expectedKind)
+            return false;
+
+        var liveName = actor.Name.ToString();
+        return string.IsNullOrWhiteSpace(expectedName)
+            || string.Equals(liveName, expectedName, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Small diagnostic label for logs and debug tooltips.
     /// </summary>
     public string DebugText => $"OID:{GameObjectId:X} / EID:{EntityId:X8} / IDX:{ObjectIndex}";
@@ -83,6 +107,9 @@ public sealed class ActorEntry
 
     /// <summary>Whether this actor is treated as an NPC/event/enemy-like entry.</summary>
     public required bool IsNpcLike { get; init; }
+
+    /// <summary>Whether this actor is a character-like object that Gpose Cast may alpha-hide locally.</summary>
+    public required bool CanNativeAlphaHide { get; init; }
 
     /// <summary>True when the actor lives in the GPose object-table range.</summary>
     public required bool IsGposeActor { get; init; }
