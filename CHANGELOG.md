@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.9.1
+- Patch-day version bump for the current FFXIV/Dalamud rebuild.
+- Hardened restore behavior so actors previously hidden by Gpose Cast can still be restored even if experimental non-player hiding is disabled afterward.
+- Reworked the release script so it builds first, stops on build failure, copies the package to both `plugins/GposeCast.zip` and `dist/GposeCast-latest.zip`, and verifies package/manifest/DLL versions before release.
+
 ## 0.8.9
 - Added an emergency safety guard after an FFXIV update crash when isolating outdoors.
 - Player hiding remains the default isolation path.

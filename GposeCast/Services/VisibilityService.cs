@@ -161,10 +161,10 @@ public sealed class VisibilityService
 
         try
         {
-            if (!CanAlphaHide(live))
+            if (!CanRestoreAlpha(live))
             {
                 hiddenActors.Remove(key);
-                Plugin.Log.Warning($"Gpose Cast: skipped restore for {state.Name} because its current actor type is no longer safe to write.");
+                Plugin.Log.Warning($"Gpose Cast: skipped restore for {state.Name} because the current actor resolves to the local player.");
                 return false;
             }
 
@@ -195,6 +195,15 @@ public sealed class VisibilityService
         // an explicit experimental switch because FFXIV updates can change native layouts
         // for pets, NPCs, event objects, and other object-table entries.
         return actor.IsPlayerCharacter || configuration.AllowExperimentalNonPlayerHiding;
+    }
+
+    /// <summary>Returns true when restoring alpha is allowed for an actor already hidden by this plugin.</summary>
+    private static bool CanRestoreAlpha(ActorEntry actor)
+    {
+        // Restore must not depend on the current experimental-hiding toggle. If the user
+        // hid a non-player actor while the toggle was enabled and later disables it, the
+        // plugin must still be allowed to undo its own alpha write.
+        return !actor.IsLocalPlayer;
     }
 
     /// <summary>Restores all actors hidden by the plugin.</summary>
