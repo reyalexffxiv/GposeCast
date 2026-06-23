@@ -28,8 +28,11 @@ public sealed class MainWindow : Window, IDisposable
     private readonly ISharedImmediateTexture? mascotTexture;
     private string searchText = string.Empty;
     private bool playersOnly;
+    private const long IsolationEnforceIntervalMilliseconds = 250;
+
     private bool includeUnnamed;
     private ActorKey? selectedActorKey;
+    private long lastIsolationEnforcementTicks;
 
     /// <summary>Creates the main compact workflow window.</summary>
     public MainWindow(Plugin plugin)
@@ -74,8 +77,17 @@ public sealed class MainWindow : Window, IDisposable
         // makes late arrivals disappear after the picked group has already been isolated.
         if (plugin.Visibility.IsIsolationActive && plugin.Configuration.AutoHideNewArrivals)
         {
-            var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets, plugin.Configuration.AllowExperimentalNonPlayerHiding);
-            plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
+            var now = Environment.TickCount64;
+            if (now - lastIsolationEnforcementTicks >= IsolationEnforceIntervalMilliseconds)
+            {
+                lastIsolationEnforcementTicks = now;
+                var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets, plugin.Configuration.AllowExperimentalNonPlayerHiding);
+                plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
+            }
+        }
+        else
+        {
+            lastIsolationEnforcementTicks = 0;
         }
 
         DrawToolbar();
@@ -395,7 +407,8 @@ public sealed class MainWindow : Window, IDisposable
     /// <summary>Draws an add button that imports a world actor into GPose before picking it.</summary>
     private void DrawImportAndAddButton(ActorEntry actor, bool alreadyPicked)
     {
-        using (ImRaii.Disabled(alreadyPicked))
+        var importBusy = plugin.GposeImport.IsImportInProgress;
+        using (ImRaii.Disabled(alreadyPicked || importBusy))
         {
             if (DrawSmallIconButton($"importadd-{actor.Key.GameObjectId}-{actor.Key.ObjectIndex}", FontAwesomeIcon.UserPlus))
             {
@@ -404,7 +417,7 @@ public sealed class MainWindow : Window, IDisposable
             }
         }
 
-        DrawTooltip("Import to GPose and add to picked group");
+        DrawTooltip(importBusy ? "Another import is already running" : "Import to GPose and add to picked group");
     }
 
     /// <summary>Draws one Brio-style visibility toggle for manual hide/restore.</summary>

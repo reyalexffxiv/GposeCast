@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.9.3
+- Added a single-import guard so repeated clicks cannot dispatch overlapping GPose imports.
+- Revalidates the source actor immediately before native GPose dispatch.
+- Validates the spawned GPose actor before reporting import success.
+- Cancels pending imports on GPose exit/plugin unload.
+- Avoids freeing the temporary import vtable while an import may still be finalizing.
+- Throttles active isolation enforcement to reduce object-table churn in crowded areas.
+
 ## 0.8.9.2
 - Made optional non-player hiding safer without changing the normal player-isolation workflow.
 - Non-player hiding now only alpha-hides supported character-like actors, such as NPCs, minions, pets, mounts, and ornaments.

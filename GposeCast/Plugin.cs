@@ -130,6 +130,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!transition.Left)
             return;
 
+        GposeImport.CancelPendingImport("GPose ended.");
         Visibility.StopIsolation();
         MainWindow.IsOpen = false;
     }

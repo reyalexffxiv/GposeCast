@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -33,6 +34,11 @@ public sealed class GposeImportService : IDisposable
     private readonly IObjectTable objectTable;
     private readonly IFramework framework;
     private readonly ActorScannerService actorScanner;
+    private readonly object importLock = new();
+
+    private CancellationTokenSource? activeImportCancellationSource;
+    private string? activeImportCancellationReason;
+    private volatile bool importInProgress;
 
     private unsafe nint* hookVfTable;
     private unsafe nint* eventVfTable;
@@ -54,6 +60,9 @@ public sealed class GposeImportService : IDisposable
 
     /// <summary>Latest user-facing import status for the compact header.</summary>
     public string LastImportStatus { get; private set; } = "Import not tested yet.";
+
+    /// <summary>True while one GPose import request is running.</summary>
+    public bool IsImportInProgress => importInProgress;
 
     /// <summary>Raised when an import completes and the spawned GPose actor is found.</summary>
     public event Action<ActorEntry, bool>? ImportCompleted;
@@ -97,44 +106,91 @@ public sealed class GposeImportService : IDisposable
             return false;
         }
 
-        var live = actorScanner.FindCurrent(actor.Key) ?? actor;
+        CancellationTokenSource cancellationSource;
+        lock (importLock)
+        {
+            if (importInProgress)
+            {
+                LastImportStatus = "Import refused: another import is already running.";
+                return false;
+            }
+
+            cancellationSource = new CancellationTokenSource(ImportTimeoutMilliseconds);
+            activeImportCancellationSource = cancellationSource;
+            activeImportCancellationReason = null;
+            importInProgress = true;
+        }
+
+        var live = actorScanner.FindAnyCurrent(actor.Key, actor.Name, actor.ObjectKind) ?? actor;
         if (!CanImport(live))
         {
+            FinishImport(cancellationSource);
             LastImportStatus = $"Cannot import {actor.DisplayName}: actor must be a loaded world player while in GPose.";
             Plugin.Log.Warning($"Gpose Cast: {LastImportStatus}");
             return false;
         }
 
         LastImportStatus = $"Requested GPose clone spawn for {live.DisplayName}...";
-        _ = ImportOverworldActorAsync(live, addToPickedAfterImport);
+        _ = ImportOverworldActorAsync(live, addToPickedAfterImport, cancellationSource);
         return true;
     }
 
+    /// <summary>Cancels a pending import if one is running.</summary>
+    public void CancelPendingImport(string reason)
+    {
+        CancellationTokenSource? source;
+        lock (importLock)
+        {
+            if (!importInProgress || activeImportCancellationSource is null)
+                return;
+
+            activeImportCancellationReason = reason;
+            source = activeImportCancellationSource;
+        }
+
+        try
+        {
+            source.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The import completed at the same time as the cancel request. Nothing to do.
+        }
+    }
+
     /// <summary>Runs the import flow and marshals UI-facing updates back to the framework thread.</summary>
-    private async Task ImportOverworldActorAsync(ActorEntry live, bool addToPickedAfterImport)
+    private async Task ImportOverworldActorAsync(ActorEntry live, bool addToPickedAfterImport, CancellationTokenSource cancellationSource)
     {
         try
         {
-            var address = await CreateActorAsync(live);
+            var importedActor = await CreateActorAsync(live, cancellationSource.Token);
 
             await framework.RunOnFrameworkThread(() =>
             {
+                cancellationSource.Token.ThrowIfCancellationRequested();
                 RefreshKtisisActorList();
 
-                var importedActor = actorScanner.FindByAddress(address);
-                if (importedActor is not null)
-                    ImportCompleted?.Invoke(importedActor, addToPickedAfterImport);
+                var finalActor = actorScanner.FindByAddress(importedActor.Address) ?? importedActor;
+                ImportCompleted?.Invoke(finalActor, addToPickedAfterImport);
 
-                LastImportStatus = importedActor is null
-                    ? $"Imported {live.DisplayName} into GPose at 0x{address.ToInt64():X}. Refresh Brio/Ktisis if needed."
-                    : $"Imported {importedActor.DisplayName} into GPose at index {importedActor.Key.ObjectIndex}.";
+                LastImportStatus = $"Imported {finalActor.DisplayName} into GPose at index {finalActor.Key.ObjectIndex}.";
                 Plugin.Log.Information($"Gpose Cast: {LastImportStatus}");
             });
+        }
+        catch (OperationCanceledException)
+        {
+            var reason = GetImportCancellationReason() ?? (clientState.IsGPosing ? "request cancelled." : "GPose ended.");
+            LastImportStatus = $"Import cancelled: {reason}";
+            Plugin.Log.Information($"Gpose Cast: {LastImportStatus}");
         }
         catch (Exception ex)
         {
             LastImportStatus = $"Import failed for {live.DisplayName}: {ex.Message}";
             Plugin.Log.Error(ex, $"Gpose Cast: failed to import {live.DisplayName} to GPose.");
+        }
+        finally
+        {
+            FinishImport(cancellationSource);
         }
     }
 
@@ -183,35 +239,44 @@ public sealed class GposeImportService : IDisposable
     }
 
     /// <summary>Dispatches the event and waits for the expected GPose slot to become valid.</summary>
-    private async Task<nint> CreateActorAsync(ActorEntry original)
+    private async Task<ActorEntry> CreateActorAsync(ActorEntry original, CancellationToken cancellationToken)
     {
-        using var source = new CancellationTokenSource();
-        source.CancelAfter(ImportTimeoutMilliseconds);
-
-        var index = await framework.RunOnFrameworkThread(() =>
+        var pending = await framework.RunOnFrameworkThread(() =>
         {
-            if (!TryDispatch(original, out var spawnIndex))
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!clientState.IsGPosing)
+                throw new OperationCanceledException("GPose ended before import dispatch.", cancellationToken);
+
+            // Re-resolve immediately before touching native state. The row that the user
+            // clicked may have been rebuilt or unloaded between UI draw and dispatch.
+            var live = actorScanner.FindAnyCurrent(original.Key, original.Name, original.ObjectKind);
+            if (live is null || !CanImport(live))
+                throw new InvalidOperationException($"Source actor '{original.DisplayName}' is no longer a loaded world player.");
+
+            if (!TryDispatch(live, out var spawnIndex))
                 throw new InvalidOperationException("GPose object table is full. KtisisPyon uses slots 200-238.");
-            return spawnIndex;
+
+            return new PendingImport(spawnIndex, live.Name, live.ObjectKind);
         });
 
-        while (!source.IsCancellationRequested)
+        while (true)
         {
-            var address = await framework.RunOnFrameworkThread(() =>
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var imported = await framework.RunOnFrameworkThread(() =>
             {
-                var spawned = objectTable[(int)index];
-                if (spawned is null || !spawned.IsValid() || spawned.Address == nint.Zero)
-                    return nint.Zero;
-                return spawned.Address;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!clientState.IsGPosing)
+                    throw new OperationCanceledException("GPose ended while waiting for import.", cancellationToken);
+
+                return TryGetSpawnedActor(pending);
             });
 
-            if (address != nint.Zero)
-                return address;
+            if (imported is not null)
+                return imported;
 
-            await Task.Delay(10, CancellationToken.None);
+            await Task.Delay(25, cancellationToken);
         }
-
-        throw new TaskCanceledException($"Actor spawn at index {index} timed out.");
     }
 
     /// <summary>Finds the next free GPose actor slot and dispatches the spawn event.</summary>
@@ -253,6 +318,34 @@ public sealed class GposeImportService : IDisposable
         dispatchEvent(handler, task);
     }
 
+    /// <summary>Returns the spawned GPose actor only after the expected slot contains a matching player actor.</summary>
+    private ActorEntry? TryGetSpawnedActor(PendingImport pending)
+    {
+        var spawned = objectTable[(int)pending.ObjectIndex];
+        var entry = actorScanner.FromGameObject(spawned);
+        if (entry is null || entry.Address == nint.Zero)
+            return null;
+
+        if (!entry.IsGposeActor || !entry.IsPlayerCharacter)
+            return null;
+
+        if (!NamesMatch(pending.SourceName, entry.Name))
+        {
+            Plugin.Log.Warning($"Gpose Cast: GPose slot {pending.ObjectIndex} filled by unexpected actor '{entry.DisplayName}', waiting for '{pending.SourceName}'.");
+            return null;
+        }
+
+        return entry;
+    }
+
+    /// <summary>Returns true when the spawned actor still appears to be the requested source actor.</summary>
+    private static bool NamesMatch(string expectedName, string liveName)
+    {
+        return string.IsNullOrWhiteSpace(expectedName)
+            || string.IsNullOrWhiteSpace(liveName)
+            || string.Equals(expectedName, liveName, StringComparison.Ordinal);
+    }
+
     /// <summary>Finds the first free GPose slot in the KtisisPyon spawn range.</summary>
     private ushort CalculateNextIndex()
     {
@@ -264,6 +357,32 @@ public sealed class GposeImportService : IDisposable
 
         return ushort.MaxValue;
     }
+
+    /// <summary>Marks an import as finished and clears the single-import guard.</summary>
+    private void FinishImport(CancellationTokenSource cancellationSource)
+    {
+        lock (importLock)
+        {
+            if (ReferenceEquals(activeImportCancellationSource, cancellationSource))
+            {
+                activeImportCancellationSource = null;
+                activeImportCancellationReason = null;
+                importInProgress = false;
+            }
+        }
+
+        cancellationSource.Dispose();
+    }
+
+    /// <summary>Returns the current cancellation reason, if the active import was cancelled externally.</summary>
+    private string? GetImportCancellationReason()
+    {
+        lock (importLock)
+            return activeImportCancellationReason;
+    }
+
+    /// <summary>Small identity snapshot for an import request that has been dispatched.</summary>
+    private readonly record struct PendingImport(uint ObjectIndex, string SourceName, ObjectKind SourceKind);
 
     /// <summary>Marks the spawned actor as a local temporary GPose entity before finalization.</summary>
     private static unsafe void FinalizeHook(GPoseActorEvent* self, nint a2, nint a3)
@@ -292,6 +411,18 @@ public sealed class GposeImportService : IDisposable
     /// <summary>Frees the copied vtable allocated during initialization.</summary>
     public unsafe void Dispose()
     {
+        CancelPendingImport("plugin unloading.");
+
+        // If the native event may still finalize asynchronously, do not free the copied
+        // vtable under it. The allocation is tiny and process-local; avoiding a possible
+        // use-after-free during plugin unload is more important than reclaiming it here.
+        if (importInProgress)
+        {
+            Plugin.Log.Warning("Gpose Cast: leaving import vtable allocated because plugin unloaded during an active import.");
+            hookVfTable = null;
+            return;
+        }
+
         if (hookVfTable != null)
         {
             Marshal.FreeHGlobal((nint)hookVfTable);
