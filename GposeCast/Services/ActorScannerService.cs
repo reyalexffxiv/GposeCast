@@ -237,6 +237,7 @@ public sealed class ActorScannerService
             IsLocalPlayer = isLocalPlayer,
             IsPlayerCharacter = IsPlayer(actor),
             IsCompanionLike = IsCompanionLike(actor),
+            IsFashionAccessory = IsFashionAccessory(actor),
             IsNpcLike = IsNpcLike(actor),
             CanNativeAlphaHide = CanNativeAlphaHide(actor),
             IsGposeActor = IsGposeActor(actor),
@@ -343,6 +344,17 @@ public sealed class ActorScannerService
             || kind.Equals("Mount", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("MountType", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("Ornament", StringComparison.OrdinalIgnoreCase)
+            || kind.Equals("OrnamentType", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Detects fashion accessories. FFXIV exposes umbrellas/parasols and similar accessories
+    /// as separate ornament actors rather than as part of the player actor itself.
+    /// </summary>
+    private static bool IsFashionAccessory(IGameObject actor)
+    {
+        var kind = actor.ObjectKind.ToString();
+        return kind.Equals("Ornament", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("OrnamentType", StringComparison.OrdinalIgnoreCase);
     }
 

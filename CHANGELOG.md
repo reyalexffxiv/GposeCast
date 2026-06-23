@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.9.4
+- Preserves nearby ornament/fashion-accessory actors for picked players during isolation.
+- Fixes umbrellas, parasols, and modded ornament-based accessories disappearing when their player is kept visible.
+- Keeps the behavior local and conservative: unrelated ornaments still hide normally when optional non-player hiding is enabled.
+
 ## 0.8.9.3
 - Added a single-import guard so repeated clicks cannot dispatch overlapping GPose imports.
 - Revalidates the source actor immediately before native GPose dispatch.

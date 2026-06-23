@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Game.ClientState.Objects.Enums;
 using GposeCast.Models;
 using NativeCharacter = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
@@ -17,6 +18,7 @@ namespace GposeCast.Services;
 public sealed class VisibilityService
 {
     private const float HiddenAlpha = 0.0f;
+    private const float PickedFashionAccessoryPreserveRadius = 3.0f;
 
     private readonly ActorScannerService actorScanner;
     private readonly Configuration configuration;
@@ -76,13 +78,18 @@ public sealed class VisibilityService
             .Select(actor => actor.DisplayName)
             .Where(name => !string.IsNullOrWhiteSpace(name) && name != "<unnamed>")
             .ToHashSet(StringComparer.Ordinal);
+        var pickedFashionAccessories = FindPickedFashionAccessories(visibleActors, picked);
 
         foreach (var actor in visibleActors)
         {
             // Name matching keeps imported GPose clones and their original world actor
             // aligned. Exact key matching still handles pets/NPCs/unnamed objects.
             var samePickedPlayerName = actor.IsPlayerCharacter && pickedNames.Contains(actor.DisplayName);
-            var shouldStayVisible = actor.IsLocalPlayer || samePickedPlayerName || pickedKeys.Any(key => key.Equals(actor.Key));
+            var linkedPickedFashionAccessory = actor.IsFashionAccessory && pickedFashionAccessories.Contains(actor.Key);
+            var shouldStayVisible = actor.IsLocalPlayer
+                || samePickedPlayerName
+                || linkedPickedFashionAccessory
+                || pickedKeys.Any(key => key.Equals(actor.Key));
 
             if (shouldStayVisible)
             {
@@ -94,6 +101,32 @@ public sealed class VisibilityService
 
             Hide(actor, allowLocalPlayer: false, reason: "group isolation");
         }
+    }
+
+    /// <summary>
+    /// Finds ornament/fashion-accessory actors that should stay visible because they are
+    /// visually attached to a picked player. FFXIV exposes umbrellas/parasols as separate
+    /// actors, so exact actor-key matching alone would hide them during isolation.
+    /// </summary>
+    private static HashSet<ActorKey> FindPickedFashionAccessories(IReadOnlyCollection<ActorEntry> visibleActors, IReadOnlyCollection<ActorEntry> pickedActors)
+    {
+        var pickedPlayers = pickedActors
+            .Where(actor => actor.IsPlayerCharacter)
+            .ToList();
+
+        if (pickedPlayers.Count == 0)
+            return new HashSet<ActorKey>();
+
+        var preserveRadiusSquared = PickedFashionAccessoryPreserveRadius * PickedFashionAccessoryPreserveRadius;
+        var protectedAccessories = new HashSet<ActorKey>();
+
+        foreach (var accessory in visibleActors.Where(actor => actor.IsFashionAccessory && actor.CanNativeAlphaHide))
+        {
+            if (pickedPlayers.Any(player => Vector3.DistanceSquared(player.Position, accessory.Position) <= preserveRadiusSquared))
+                protectedAccessories.Add(accessory.Key);
+        }
+
+        return protectedAccessories;
     }
 
     /// <summary>Applies alpha hide to a live actor and stores the original alpha.</summary>

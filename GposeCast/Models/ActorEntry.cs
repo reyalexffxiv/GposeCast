@@ -105,6 +105,9 @@ public sealed class ActorEntry
     /// <summary>Whether this actor is treated as a pet/minion/companion-like entry.</summary>
     public required bool IsCompanionLike { get; init; }
 
+    /// <summary>Whether this actor is treated as a fashion accessory/ornament actor.</summary>
+    public required bool IsFashionAccessory { get; init; }
+
     /// <summary>Whether this actor is treated as an NPC/event/enemy-like entry.</summary>
     public required bool IsNpcLike { get; init; }
 
