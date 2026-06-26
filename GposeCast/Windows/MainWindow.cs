@@ -10,6 +10,7 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Windowing;
 using GposeCast.Models;
+using GposeCast.Services;
 
 namespace GposeCast.Windows;
 
@@ -28,11 +29,8 @@ public sealed class MainWindow : Window, IDisposable
     private readonly ISharedImmediateTexture? mascotTexture;
     private string searchText = string.Empty;
     private bool playersOnly;
-    private const long IsolationEnforceIntervalMilliseconds = 250;
-
     private bool includeUnnamed;
     private ActorKey? selectedActorKey;
-    private long lastIsolationEnforcementTicks;
 
     /// <summary>Creates the main compact workflow window.</summary>
     public MainWindow(Plugin plugin)
@@ -72,23 +70,6 @@ public sealed class MainWindow : Window, IDisposable
     public override void Draw()
     {
         DrawCompactHeader();
-
-        // Keep sweeping newly loaded candidates while isolation is active. This is what
-        // makes late arrivals disappear after the picked group has already been isolated.
-        if (plugin.Visibility.IsIsolationActive && plugin.Configuration.AutoHideNewArrivals)
-        {
-            var now = Environment.TickCount64;
-            if (now - lastIsolationEnforcementTicks >= IsolationEnforceIntervalMilliseconds)
-            {
-                lastIsolationEnforcementTicks = now;
-                var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets, plugin.Configuration.AllowExperimentalNonPlayerHiding);
-                plugin.Visibility.EnforceIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
-            }
-        }
-        else
-        {
-            lastIsolationEnforcementTicks = 0;
-        }
 
         DrawToolbar();
         DrawFilters();
@@ -160,8 +141,12 @@ public sealed class MainWindow : Window, IDisposable
         if (!plugin.Visibility.IsIsolationActive)
             return;
 
+        var protectedSuffix = plugin.Visibility.ProtectedFashionAccessoryCount > 0
+            ? $", {plugin.Visibility.ProtectedFashionAccessoryCount} linked accessory protected"
+            : string.Empty;
+
         ImGui.TextColored(new Vector4(1f, 0.8f, 0.35f, 1f),
-            $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible");
+            $"Isolation ON: {plugin.Visibility.HiddenCount} hidden, {plugin.CastGroup.PickedActors.Count} visible{protectedSuffix}");
     }
 
     /// <summary>Draws the compact top-row action buttons.</summary>
@@ -176,27 +161,41 @@ public sealed class MainWindow : Window, IDisposable
             AddCurrentTarget();
         DrawTooltip("Add your current GPose/world target");
 
+        if (plugin.Configuration.EnableAccessoryDiagnostics)
+        {
+            ImGui.SameLine();
+            if (DrawToolbarButton("Dump", ButtonTone.Neutral))
+                DumpSelectedOrTargetNearbyActors();
+            DrawTooltip("Dump nearby object-table actors for the selected row, target, or self to /xllog");
+
+            ImGui.SameLine();
+            using (ImRaii.Disabled(plugin.CastGroup.PickedActors.Count == 0))
+            {
+                if (DrawToolbarButton("State", ButtonTone.Neutral))
+                    DumpIsolationState("manual UI state dump");
+            }
+            DrawTooltip("Dump Gpose Cast visibility state for picked actors, including protected ornaments, hidden state, keep reason, and alpha");
+
+        }
+
         ImGui.SameLine();
         using (ImRaii.Disabled(plugin.CastGroup.PickedActors.Count == 0))
         {
             if (DrawToolbarButton("Clear", ButtonTone.Warning))
-            {
-                plugin.Visibility.StopIsolation();
-                plugin.CastGroup.Clear();
-            }
+                RestoreSourcesDestroyImportedClonesAndClear("manual clear");
         }
-        DrawTooltip("Clear picked group and stop isolation");
+        DrawTooltip("Restore hidden actors, remove imported temporary actors, and clear the picked group");
 
         ImGui.SameLine();
         DrawIsolationButton();
 
         ImGui.SameLine();
-        using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0))
+        using (ImRaii.Disabled(plugin.Visibility.HiddenCount == 0 && plugin.GposeImport.ImportedCloneCount == 0))
         {
-            if (DrawToolbarButton($"Restore {plugin.Visibility.HiddenCount}", ButtonTone.Restore))
-                plugin.Visibility.StopIsolation();
+            if (DrawToolbarButton("Restore", ButtonTone.Restore))
+                RestoreSourcesDestroyImportedClonesAndClear("manual restore");
         }
-        DrawTooltip("Restore every actor hidden by Gpose Cast");
+        DrawTooltip("Restore hidden actors and remove imported temporary actors");
     }
 
     /// <summary>Small color set used by the compact toolbar buttons.</summary>
@@ -251,7 +250,11 @@ public sealed class MainWindow : Window, IDisposable
             }
 
             var isolationCandidates = plugin.ActorScanner.ScanIsolationCandidates(plugin.Configuration.HideNpcs, plugin.Configuration.HideMinionsAndPets, plugin.Configuration.AllowExperimentalNonPlayerHiding);
+            if (plugin.Configuration.EnableAccessoryDiagnostics)
+                Plugin.Log.Information($"Gpose Cast: isolation requested with {plugin.CastGroup.PickedActors.Count} picked actor(s) and {isolationCandidates.Count} candidate actor(s).");
             plugin.Visibility.StartIsolation(isolationCandidates, plugin.CastGroup.PickedActors);
+            if (plugin.Visibility.IsIsolationActive && plugin.Configuration.EnableAccessoryDiagnostics)
+                DumpIsolationState("after isolation start");
         }
 
         DrawTooltip(plugin.Visibility.IsIsolationActive
@@ -312,7 +315,11 @@ public sealed class MainWindow : Window, IDisposable
         foreach (var picked in OrderedPickedActors())
         {
             var live = plugin.ActorScanner.FindCurrent(picked.Key);
-            var display = live ?? picked;
+            var display = live is null
+                ? picked
+                : !string.IsNullOrWhiteSpace(picked.DisplayAlias) && string.IsNullOrWhiteSpace(live.Name)
+                    ? live.WithDisplayAlias(picked.DisplayAlias)
+                    : live;
 
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
@@ -420,7 +427,7 @@ public sealed class MainWindow : Window, IDisposable
         DrawTooltip(importBusy ? "Another import is already running" : "Import to GPose and add to picked group");
     }
 
-    /// <summary>Draws one Brio-style visibility toggle for manual hide/restore.</summary>
+    /// <summary>Draws one compact visibility toggle for manual hide/restore.</summary>
     private void DrawVisibilityToggle(ActorEntry actor, bool alreadyHidden)
     {
         var disabled = actor.IsLocalPlayer
@@ -526,6 +533,61 @@ public sealed class MainWindow : Window, IDisposable
             DrawTooltip("Actor is visible but not targetable");
     }
 
+    /// <summary>Dumps nearby actors around the selected row, current target, or self.</summary>
+    private void DumpSelectedOrTargetNearbyActors()
+    {
+        var anchor = ResolveSelectedActorForDump();
+        if (anchor is null)
+        {
+            Plugin.Log.Warning("Gpose Cast: no actor found for nearby dump.");
+            return;
+        }
+
+        plugin.ActorScanner.DumpNearbyActors(anchor, ActorScannerService.DefaultNearbyDumpRadius, "manual UI dump");
+
+        if (plugin.CastGroup.PickedActors.Count > 0)
+            DumpIsolationState("manual UI dump visibility state");
+    }
+
+    /// <summary>Dumps Gpose Cast's current visibility decision state around picked actors.</summary>
+    private void DumpIsolationState(string reason)
+    {
+        if (plugin.CastGroup.PickedActors.Count > 0)
+        {
+            plugin.Visibility.DumpIsolationDebug(plugin.CastGroup.PickedActors, plugin.CastGroup.PickedActors, reason);
+            return;
+        }
+
+        var anchor = ResolveSelectedActorForDump();
+        if (anchor is null)
+        {
+            Plugin.Log.Warning($"Gpose Cast: isolation state dump '{reason}' skipped because no actor could be resolved.");
+            return;
+        }
+
+        plugin.Visibility.DumpIsolationDebug(new[] { anchor }, new[] { anchor }, reason);
+    }
+
+    /// <summary>Resolves the best current anchor for the nearby actor dump.</summary>
+    private ActorEntry? ResolveSelectedActorForDump()
+    {
+        if (selectedActorKey is { } selected)
+        {
+            var selectedActor = plugin.ActorScanner.FindAnyCurrent(selected);
+            if (selectedActor is not null)
+                return selectedActor;
+        }
+
+        var target = plugin.GposeState.IsInGpose
+            ? Plugin.TargetManager.GPoseTarget ?? Plugin.TargetManager.Target
+            : Plugin.TargetManager.Target ?? Plugin.TargetManager.GPoseTarget;
+        var targetActor = plugin.ActorScanner.FromGameObject(target);
+        if (targetActor is not null)
+            return targetActor;
+
+        return plugin.ActorScanner.FindLocalPlayer();
+    }
+
     /// <summary>Adds the local player to the picked group.</summary>
     private void AddSelf()
     {
@@ -537,6 +599,15 @@ public sealed class MainWindow : Window, IDisposable
         }
 
         AddActorToPicked(actor);
+    }
+
+    /// <summary>Restores original hidden source actors, removes imported temporary actors, and clears stale picked entries.</summary>
+    private void RestoreSourcesDestroyImportedClonesAndClear(string reason)
+    {
+        plugin.Visibility.StopIsolation();
+        plugin.GposeImport.DestroyAllImportedClones(reason);
+        plugin.CastGroup.Clear();
+        selectedActorKey = null;
     }
 
     /// <summary>Adds the current target to the picked group.</summary>
@@ -567,15 +638,39 @@ public sealed class MainWindow : Window, IDisposable
     }
 
     /// <summary>Handles import completion events from the import service.</summary>
-    private void OnImportCompleted(ActorEntry importedActor, bool addToPickedAfterImport)
+    private void OnImportCompleted(ActorEntry importedActor, ActorEntry sourceActor, bool addToPickedAfterImport, IReadOnlyList<ActorEntry> linkedFashionAccessories, bool linkedChildImportUsed)
     {
+        if (linkedChildImportUsed)
+        {
+            plugin.Visibility.HideImportedSourceDuplicate(sourceActor, linkedFashionAccessories, $"linked-child import of {importedActor.DisplayName}");
+        }
+        else if (linkedFashionAccessories.Count > 0)
+        {
+            plugin.Visibility.ProtectFashionAccessories(linkedFashionAccessories, $"import of {importedActor.DisplayName}");
+        }
+
+        if (plugin.Configuration.EnableAccessoryDiagnostics)
+        {
+            plugin.ActorScanner.DumpNearbyActors(importedActor, ActorScannerService.DefaultNearbyDumpRadius, "after remote player import");
+            var postImportPickedActors = plugin.CastGroup.PickedActors.ToList();
+            if (addToPickedAfterImport)
+                postImportPickedActors.Add(importedActor);
+
+            if (postImportPickedActors.Count > 0)
+                plugin.Visibility.DumpIsolationDebug(new[] { importedActor }, postImportPickedActors, "after remote player import visibility state");
+        }
+
         selectedActorKey = importedActor.Key;
         if (!addToPickedAfterImport)
             return;
 
         plugin.CastGroup.Add(importedActor);
         if (plugin.Visibility.IsIsolationActive)
+        {
             plugin.Visibility.Restore(importedActor.Key);
+            if (plugin.Configuration.EnableAccessoryDiagnostics)
+                DumpIsolationState("after import during active isolation");
+        }
     }
 
     /// <summary>Draws a tooltip for the previous ImGui item when hovered.</summary>

@@ -1,3 +1,4 @@
+using System;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
@@ -14,6 +15,8 @@ namespace GposeCast;
 public sealed class Plugin : IDalamudPlugin
 {
     private const string CommandName = "/gposecast";
+    private const long IsolationEnforceIntervalMilliseconds = 250;
+
 
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
@@ -50,6 +53,8 @@ public sealed class Plugin : IDalamudPlugin
     private ConfigWindow ConfigWindow { get; }
     private MainWindow MainWindow { get; }
 
+    private long lastIsolationEnforcementTicks;
+
     /// <summary>
     /// Creates services, windows, commands, and Dalamud callbacks.
     /// </summary>
@@ -61,7 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         ActorScanner = new ActorScannerService(ObjectTable, ClientState);
         CastGroup = new CastGroupService();
         Visibility = new VisibilityService(ActorScanner, Configuration);
-        GposeImport = new GposeImportService(ClientState, ObjectTable, Framework, ActorScanner);
+        GposeImport = new GposeImportService(ClientState, ObjectTable, Framework, ActorScanner, Configuration);
 
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
@@ -86,7 +91,7 @@ public sealed class Plugin : IDalamudPlugin
         if (Configuration.AutoOpenInGpose && GposeState.IsInGpose)
             MainWindow.IsOpen = true;
 
-        Log.Information("Gpose Cast loaded. Player isolation/import enabled; optional NPC/pet hiding available in settings.");
+        Log.Information("Gpose Cast loaded. GPose import/isolation enabled; optional NPC/pet hiding available in settings.");
     }
 
     /// <summary>
@@ -102,6 +107,8 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.DisableGposeUiHide = false;
 
         Visibility.RestoreAll();
+        GposeImport.DestroyAllImportedClones("plugin unloading");
+        CastGroup.Clear();
         GposeImport.Dispose();
 
         WindowSystem.RemoveAllWindows();
@@ -127,12 +134,46 @@ public sealed class Plugin : IDalamudPlugin
         if (transition.Entered && Configuration.AutoOpenInGpose)
             MainWindow.IsOpen = true;
 
-        if (!transition.Left)
+        if (transition.Left)
+        {
+            lastIsolationEnforcementTicks = 0;
+            GposeImport.CancelPendingImport("GPose ended.");
+            Visibility.StopIsolation();
+            GposeImport.DestroyAllImportedClones("GPose ended");
+            CastGroup.Clear();
+            MainWindow.IsOpen = false;
+            return;
+        }
+
+        EnforceActiveIsolation();
+    }
+
+    /// <summary>
+    /// Keeps isolation active even when the compact UI is closed or covered. Newly loaded
+    /// players, mounts, minions, and NPC-like actors can appear after the user presses Isolate,
+    /// especially in busy venues, so the rule must live in Framework.Update instead of only
+    /// inside the window draw loop.
+    /// </summary>
+    private void EnforceActiveIsolation()
+    {
+        if (!GposeState.IsInGpose || !Visibility.IsIsolationActive || !Configuration.AutoHideNewArrivals || CastGroup.PickedActors.Count == 0)
+        {
+            lastIsolationEnforcementTicks = 0;
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        if (now - lastIsolationEnforcementTicks < IsolationEnforceIntervalMilliseconds)
             return;
 
-        GposeImport.CancelPendingImport("GPose ended.");
-        Visibility.StopIsolation();
-        MainWindow.IsOpen = false;
+        lastIsolationEnforcementTicks = now;
+
+        var isolationCandidates = ActorScanner.ScanIsolationCandidates(
+            Configuration.HideNpcs,
+            Configuration.HideMinionsAndPets,
+            Configuration.AllowExperimentalNonPlayerHiding);
+
+        Visibility.EnforceIsolation(isolationCandidates, CastGroup.PickedActors);
     }
 
     /// <summary>Toggles the configuration window.</summary>

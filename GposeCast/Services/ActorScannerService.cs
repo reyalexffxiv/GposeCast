@@ -7,6 +7,7 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using GposeCast.Models;
+using NativeCharacter = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
 
 namespace GposeCast.Services;
 
@@ -31,6 +32,9 @@ public sealed class ActorScannerService
 
     /// <summary>Upper range used by Brio/Ktisis-style GPose actor scans.</summary>
     private const ushort GPoseEnd = 439;
+
+    /// <summary>Default radius used by the nearby-actor diagnostic dump.</summary>
+    public const float DefaultNearbyDumpRadius = 12.0f;
 
     private readonly IObjectTable objectTable;
     private readonly IClientState clientState;
@@ -92,7 +96,11 @@ public sealed class ActorScannerService
             // Never apply the UI's unnamed filter here. Many visible pets/minions/NPCs
             // have blank names while in GPose and still need to be hidden.
             .Where(entry => entry.IsPlayerCharacter
-                || (allowExperimentalNonPlayerHiding && hideMinionsAndPets && entry.IsCompanionLike && entry.CanNativeAlphaHide)
+                // Mounted players, minions, pets, and ornaments can stream in after
+                // isolation starts. Include character-like linked children in the
+                // candidate set by default; VisibilityService will still preserve
+                // picked/local linked children before hiding the rest.
+                || (entry.IsCompanionLike && entry.CanNativeAlphaHide)
                 || (allowExperimentalNonPlayerHiding && hideNpcs && entry.IsNpcLike && entry.CanNativeAlphaHide))
             .OrderBy(entry => entry.Distance)
             .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -212,6 +220,96 @@ public sealed class ActorScannerService
     }
 
     /// <summary>
+    /// Scans all currently loaded objects near the provided anchor. Distances are measured
+    /// from the anchor actor instead of from the local player.
+    /// </summary>
+    public IReadOnlyList<ActorEntry> ScanNearbyActors(ActorEntry anchor, float radius = DefaultNearbyDumpRadius)
+    {
+        var liveAnchor = FindAnyCurrent(anchor.Key, anchor.Name, anchor.ObjectKind) ?? anchor;
+        var localPlayer = objectTable.LocalPlayer;
+        var localKey = localPlayer is null ? default : ActorKey.From(localPlayer);
+        var radiusSquared = radius * radius;
+
+        return objectTable
+            .Where(IsUsableObject)
+            .Select(actor => ToEntry(actor, liveAnchor.Position, localPlayer is not null && localKey.Matches(actor)))
+            .Where(entry => Vector3.DistanceSquared(liveAnchor.Position, entry.Position) <= radiusSquared)
+            .OrderBy(entry => entry.Distance)
+            .ThenBy(entry => entry.Key.ObjectIndex)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Finds fashion accessories that are linked to the supplied player through the native
+    /// parent-character relationship. A proximity fallback can be enabled for diagnostics,
+    /// but real import decisions keep this disabled.
+    /// </summary>
+    public IReadOnlyList<ActorEntry> FindLinkedFashionAccessories(ActorEntry owner, float radius = DefaultNearbyDumpRadius, bool allowProximityFallback = false)
+    {
+        return FindLinkedOwnedCompanions(owner, radius, allowProximityFallback)
+            .Where(actor => actor.IsFashionAccessory)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Finds native child actors owned by a player, including ornaments/fashion accessories,
+    /// mounts, minions, and companion-like objects. Mounted actors use the mount as the
+    /// movable root in Brio, so Gpose Cast must hide/protect that child just like umbrellas.
+    /// </summary>
+    public IReadOnlyList<ActorEntry> FindLinkedOwnedCompanions(ActorEntry owner, float radius = DefaultNearbyDumpRadius, bool allowProximityFallback = false)
+    {
+        var liveOwner = FindAnyCurrent(owner.Key, owner.Name, owner.ObjectKind) ?? owner;
+        var ownerName = liveOwner.DisplayName;
+
+        return ScanNearbyActors(liveOwner, radius)
+            .Where(actor => IsOwnedCompanionCandidate(actor) && actor.CanNativeAlphaHide)
+            .Where(actor => IsLinkedToOwner(actor, liveOwner, ownerName, allowProximityFallback))
+            .OrderBy(actor => actor.Distance)
+            .ThenBy(actor => actor.Key.ObjectIndex)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Writes a diagnostic nearby object-table dump to /xllog. This is intentionally verbose
+    /// so umbrella/parasol and modded flag actors can be identified from real client data.
+    /// </summary>
+    public void DumpNearbyActors(ActorEntry anchor, float radius = DefaultNearbyDumpRadius, string reason = "manual")
+    {
+        var liveAnchor = FindAnyCurrent(anchor.Key, anchor.Name, anchor.ObjectKind) ?? anchor;
+        var nearby = ScanNearbyActors(liveAnchor, radius);
+        var linkedAccessories = FindLinkedFashionAccessories(liveAnchor, radius, allowProximityFallback: false);
+        var linkedOwnedCompanions = FindLinkedOwnedCompanions(liveAnchor, radius, allowProximityFallback: false);
+
+        Plugin.Log.Information($"Gpose Cast: nearby actor dump '{reason}' around {FormatActorDebug(liveAnchor)} radius={radius:F1}m count={nearby.Count} linkedFashionAccessories={linkedAccessories.Count} linkedOwnedCompanions={linkedOwnedCompanions.Count}.");
+
+        foreach (var actor in nearby)
+        {
+            Plugin.Log.Information(
+                "Gpose Cast dump: "
+                + $"Name=\"{actor.DisplayName}\" | "
+                + $"Kind={actor.ObjectKind} | "
+                + $"SubKind=0x{actor.SubKind:X2} | "
+                + $"ObjectIndex={actor.Key.ObjectIndex} | "
+                + $"GameObjectId=0x{actor.Key.GameObjectId:X} | "
+                + $"EntityId=0x{actor.Key.EntityId:X8} | "
+                + $"Address={FormatAddress(actor.Address)} | "
+                + $"Distance={actor.Distance:F2}m | "
+                + $"IsICharacter={actor.IsICharacter} | "
+                + $"IsGposeActor={actor.IsGposeActor} | "
+                + $"IsOverworldActor={actor.IsOverworldActor} | "
+                + $"CanNativeAlphaHide={actor.CanNativeAlphaHide} | "
+                + $"IsFashionAccessory={actor.IsFashionAccessory} | "
+                + $"ParentName=\"{actor.ParentName}\" | "
+                + $"ParentKey={FormatParentKey(actor)} | "
+                + $"ParentAddress={FormatAddress(actor.ParentAddress)}");
+        }
+    }
+
+
+    // The earlier pre-release deep native-memory dump lived here. It was intentionally removed
+    // before 0.9.0.0 because release diagnostics should avoid broad raw pointer reads.
+
+    /// <summary>
     /// Checks whether the object wrapper is valid enough to read safely.
     /// </summary>
     private static bool IsUsableObject([NotNullWhen(true)] IGameObject? actor)
@@ -222,9 +320,10 @@ public sealed class ActorScannerService
     /// <summary>
     /// Converts a live game object into a UI/service actor entry.
     /// </summary>
-    private static ActorEntry ToEntry(IGameObject actor, Vector3 localPosition, bool isLocalPlayer)
+    private ActorEntry ToEntry(IGameObject actor, Vector3 localPosition, bool isLocalPlayer)
     {
         var position = actor.Position;
+        var parent = FindParentCharacter(actor);
         return new ActorEntry
         {
             Key = ActorKey.From(actor),
@@ -234,6 +333,10 @@ public sealed class ActorScannerService
             Distance = Vector3.Distance(localPosition, position),
             Position = position,
             IsTargetable = actor.IsTargetable,
+            IsICharacter = actor is ICharacter,
+            ParentKey = parent is null ? null : ActorKey.From(parent),
+            ParentName = parent?.Name.ToString() ?? string.Empty,
+            ParentAddress = parent?.Address ?? nint.Zero,
             IsLocalPlayer = isLocalPlayer,
             IsPlayerCharacter = IsPlayer(actor),
             IsCompanionLike = IsCompanionLike(actor),
@@ -356,6 +459,85 @@ public sealed class ActorScannerService
         var kind = actor.ObjectKind.ToString();
         return kind.Equals("Ornament", StringComparison.OrdinalIgnoreCase)
             || kind.Equals("OrnamentType", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns true when a fashion accessory has a native parent link to the owner. When
+    /// explicitly requested, falls back to the nearby scan distance already applied upstream.
+    /// </summary>
+    private static bool IsLinkedToOwner(ActorEntry accessory, ActorEntry owner, string ownerName, bool allowProximityFallback)
+    {
+        if (!IsOwnedCompanionCandidate(accessory))
+            return false;
+
+        if (accessory.ParentKey is { } parentKey && parentKey.Equals(owner.Key))
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(accessory.ParentName)
+            && !string.IsNullOrWhiteSpace(ownerName)
+            && accessory.ParentName.Equals(ownerName, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return allowProximityFallback;
+    }
+
+    /// <summary>True for native child actors that should follow a player import as one cast unit.</summary>
+    private static bool IsOwnedCompanionCandidate(ActorEntry actor) => actor.IsFashionAccessory || actor.IsCompanionLike;
+
+    /// <summary>
+    /// Resolves the native parent character for mounts, minions, and ornaments when the
+    /// client exposes one. Generic objects are ignored.
+    /// </summary>
+    private unsafe IGameObject? FindParentCharacter(IGameObject actor)
+    {
+        if (actor is not ICharacter || (!IsCompanionLike(actor) && !IsFashionAccessory(actor)))
+            return null;
+
+        try
+        {
+            var native = (NativeCharacter*)actor.Address;
+            if (native == null)
+                return null;
+
+            var parent = native->GetParentCharacter();
+            if (parent == null)
+                return null;
+
+            var parentAddress = (nint)parent;
+            foreach (var candidate in objectTable)
+            {
+                if (!IsUsableObject(candidate) || candidate.Address != parentAddress)
+                    continue;
+
+                return candidate;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Verbose(ex, $"Gpose Cast: failed to resolve parent character for {actor.Name}.");
+        }
+
+        return null;
+    }
+
+    /// <summary>Formats one actor for compact diagnostic logs.</summary>
+    private static string FormatActorDebug(ActorEntry actor)
+    {
+        return $"{actor.DisplayName} [Kind={actor.ObjectKind}, Index={actor.Key.ObjectIndex}, GameObjectId=0x{actor.Key.GameObjectId:X}, EntityId=0x{actor.Key.EntityId:X8}, Address={FormatAddress(actor.Address)}]";
+    }
+
+    /// <summary>Formats a nullable parent key for diagnostic logs.</summary>
+    private static string FormatParentKey(ActorEntry actor)
+    {
+        return actor.ParentKey is { } parentKey ? parentKey.DebugText : "<none>";
+    }
+
+    /// <summary>Formats native pointers for diagnostic logs.</summary>
+    private static string FormatAddress(nint address)
+    {
+        return address == nint.Zero ? "0x0" : $"0x{address.ToInt64():X}";
     }
 
     /// <summary>

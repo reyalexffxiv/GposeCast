@@ -81,6 +81,9 @@ public sealed class ActorEntry
     /// <summary>Raw actor name as reported by Dalamud.</summary>
     public required string Name { get; init; }
 
+    /// <summary>Optional Gpose Cast display name for dev/imported clones whose native name is blank.</summary>
+    public string? DisplayAlias { get; init; }
+
     /// <summary>Dalamud object kind, used for player/NPC/pet filtering.</summary>
     public required ObjectKind ObjectKind { get; init; }
 
@@ -95,6 +98,18 @@ public sealed class ActorEntry
 
     /// <summary>Whether the game currently considers this actor targetable.</summary>
     public required bool IsTargetable { get; init; }
+
+    /// <summary>Whether this object is exposed through Dalamud as an ICharacter wrapper.</summary>
+    public required bool IsICharacter { get; init; }
+
+    /// <summary>Best-effort parent character key for mounts, minions, and ornaments.</summary>
+    public required ActorKey? ParentKey { get; init; }
+
+    /// <summary>Best-effort parent character name for mounts, minions, and ornaments.</summary>
+    public required string ParentName { get; init; }
+
+    /// <summary>Best-effort parent character native address. Never persist this beyond the current frame/session.</summary>
+    public required nint ParentAddress { get; init; }
 
     /// <summary>Whether this entry represents the local player's current actor.</summary>
     public required bool IsLocalPlayer { get; init; }
@@ -130,5 +145,33 @@ public sealed class ActorEntry
     public string KindLabel => ObjectKind.ToString();
 
     /// <summary>Display-safe name shown in the UI.</summary>
-    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? "<unnamed>" : Name;
+    public string DisplayName => !string.IsNullOrWhiteSpace(DisplayAlias)
+        ? DisplayAlias
+        : string.IsNullOrWhiteSpace(Name) ? "<unnamed>" : Name;
+
+    /// <summary>Returns a copy of this entry with a Gpose Cast-only display alias.</summary>
+    public ActorEntry WithDisplayAlias(string? alias) => new()
+    {
+        Key = Key,
+        Name = Name,
+        DisplayAlias = string.IsNullOrWhiteSpace(alias) ? DisplayAlias : alias,
+        ObjectKind = ObjectKind,
+        SubKind = SubKind,
+        Distance = Distance,
+        Position = Position,
+        IsTargetable = IsTargetable,
+        IsICharacter = IsICharacter,
+        ParentKey = ParentKey,
+        ParentName = ParentName,
+        ParentAddress = ParentAddress,
+        IsLocalPlayer = IsLocalPlayer,
+        IsPlayerCharacter = IsPlayerCharacter,
+        IsCompanionLike = IsCompanionLike,
+        IsFashionAccessory = IsFashionAccessory,
+        IsNpcLike = IsNpcLike,
+        CanNativeAlphaHide = CanNativeAlphaHide,
+        IsGposeActor = IsGposeActor,
+        IsOverworldActor = IsOverworldActor,
+        Address = Address,
+    };
 }

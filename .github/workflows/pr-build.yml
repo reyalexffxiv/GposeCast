@@ -29,16 +29,3 @@ jobs:
         shell: pwsh
         run: |
           dotnet build .\GposeCast.sln -c Release
-
-      - name: Package plugin
-        shell: pwsh
-        run: |
-          powershell -ExecutionPolicy Bypass -File .\scripts\Build-DalamudPackage.ps1
-
-      - name: Store artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: GposeCast
-          path: .\dist\GposeCast-latest.zip
-          if-no-files-found: error
-          retention-days: 7

@@ -64,11 +64,15 @@ public sealed class CastGroupService
 
         // Imported GPose clones and their original overworld actors usually share a
         // player name even when their object ids differ, so use exact name matching for PCs.
-        if (!string.IsNullOrWhiteSpace(left.Name)
-            && !string.IsNullOrWhiteSpace(right.Name)
+        var leftName = left.DisplayName;
+        var rightName = right.DisplayName;
+        if (!string.IsNullOrWhiteSpace(leftName)
+            && !string.IsNullOrWhiteSpace(rightName)
+            && leftName != "<unnamed>"
+            && rightName != "<unnamed>"
             && left.IsPlayerCharacter
             && right.IsPlayerCharacter
-            && left.Name.Equals(right.Name, StringComparison.Ordinal))
+            && leftName.Equals(rightName, StringComparison.Ordinal))
         {
             return true;
         }

@@ -16,7 +16,7 @@ public sealed class ConfigWindow : Window, IDisposable
     /// <summary>Creates the configuration window.</summary>
     public ConfigWindow(Plugin plugin) : base("Gpose Cast Settings###GposeCastConfig")
     {
-        Size = new Vector2(390, 280);
+        Size = new Vector2(390, 300);
         SizeCondition = ImGuiCond.FirstUseEver;
         configuration = plugin.Configuration;
     }
@@ -27,7 +27,7 @@ public sealed class ConfigWindow : Window, IDisposable
     /// <inheritdoc />
     public override void Draw()
     {
-        ImGui.TextWrapped("Gpose Cast is designed to work inside GPose. Hidden actors are restored when leaving GPose or unloading the plugin.");
+        ImGui.TextWrapped("Gpose Cast works inside GPose. Hidden actors and imported temporary actors are restored or removed when you leave GPose or unload the plugin.");
         ImGui.Separator();
 
         DrawCheckbox("Players only by default", nameof(Configuration.PlayersOnly), configuration.PlayersOnly, value => configuration.PlayersOnly = value);
@@ -37,6 +37,27 @@ public sealed class ConfigWindow : Window, IDisposable
         DrawCheckbox("Auto-hide new arrivals", nameof(Configuration.AutoHideNewArrivals), configuration.AutoHideNewArrivals, value => configuration.AutoHideNewArrivals = value);
         DrawCheckbox("Auto-open in GPose", nameof(Configuration.AutoOpenInGpose), configuration.AutoOpenInGpose, value => configuration.AutoOpenInGpose = value);
         DrawCheckbox("Show peepo mascot", nameof(Configuration.ShowMascot), configuration.ShowMascot, value => configuration.ShowMascot = value);
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.TextColored(new Vector4(0.65f, 0.85f, 1f, 1f), "Import behavior");
+        DrawCheckbox("Preserve accessories and mounts", nameof(Configuration.HandleLinkedFashionAccessories), configuration.HandleLinkedFashionAccessories, value =>
+        {
+            configuration.HandleLinkedFashionAccessories = value;
+            configuration.CloneLinkedFashionAccessories = false;
+            configuration.AllowExperimentalAccessoryBindPatch = false;
+            if (value)
+                configuration.UseNativeCompanionCloneForLinkedAccessories = true;
+        });
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("When importing a player, keep linked umbrellas, wings, mounts, and similar child actors attached where the game exposes them.");
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.TextColored(new Vector4(0.65f, 0.85f, 1f, 1f), "Diagnostics");
+        DrawCheckbox("Show diagnostic buttons", nameof(Configuration.EnableAccessoryDiagnostics), configuration.EnableAccessoryDiagnostics, value => configuration.EnableAccessoryDiagnostics = value);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Shows Dump/State buttons and enables verbose import/isolation logs for troubleshooting.");
 
         ImGui.Spacing();
         ImGui.Separator();
