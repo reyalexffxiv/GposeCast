@@ -16,7 +16,7 @@ public sealed class ConfigWindow : Window, IDisposable
     /// <summary>Creates the configuration window.</summary>
     public ConfigWindow(Plugin plugin) : base("Gpose Cast Settings###GposeCastConfig")
     {
-        Size = new Vector2(390, 335);
+        Size = new Vector2(390, 320);
         SizeCondition = ImGuiCond.FirstUseEver;
         configuration = plugin.Configuration;
     }
@@ -44,17 +44,7 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.TextColored(new Vector4(0.65f, 0.85f, 1f, 1f), "Import behavior");
-        DrawCheckbox("Preserve accessories and mounts", nameof(Configuration.HandleLinkedFashionAccessories), configuration.HandleLinkedFashionAccessories, value =>
-        {
-            configuration.HandleLinkedFashionAccessories = value;
-            configuration.CloneLinkedFashionAccessories = false;
-            configuration.AllowExperimentalAccessoryBindPatch = false;
-            if (value)
-                configuration.UseNativeCompanionCloneForLinkedAccessories = true;
-        });
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("When importing a player, keep linked umbrellas, wings, mounts, and similar child actors attached where the game exposes them.");
-
+        ImGui.TextWrapped("Overworld player import uses the stable legacy GPose path. Fashion accessories, wings, mounts, ornaments, and companions are temporarily not preserved.");
 
         ImGui.Spacing();
         ImGui.Separator();

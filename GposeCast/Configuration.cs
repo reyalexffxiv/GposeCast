@@ -10,7 +10,7 @@ namespace GposeCast;
 public class Configuration : IPluginConfiguration
 {
     /// <summary>Dalamud configuration schema version.</summary>
-    public int Version { get; set; } = 5;
+    public int Version { get; set; } = 6;
 
     /// <summary>Default state for the compact actor list's player filter.</summary>
     public bool PlayersOnly { get; set; } = true;
@@ -45,8 +45,8 @@ public class Configuration : IPluginConfiguration
     /// <summary>Whether the main window should open automatically when GPose starts.</summary>
     public bool AutoOpenInGpose { get; set; } = true;
 
-    /// <summary>Preserves umbrellas, wings, mounts, and other linked child actors when importing players.</summary>
-    public bool HandleLinkedFashionAccessories { get; set; } = true;
+    /// <summary>Legacy/disabled switch. Fashion accessory and mount preservation is temporarily shelved; imports use the stable legacy GPose event path.</summary>
+    public bool HandleLinkedFashionAccessories { get; set; } = false;
 
     /// <summary>Whether the compact main window should show the decorative camera peepo mascot.</summary>
     public bool ShowMascot { get; set; } = true;
@@ -54,8 +54,8 @@ public class Configuration : IPluginConfiguration
     /// <summary>Whether import/isolation diagnostic buttons and verbose debug dumps should be shown.</summary>
     public bool EnableAccessoryDiagnostics { get; set; } = false;
 
-    /// <summary>Internal compatibility switch for the 0.9 import path. Hidden from normal UI.</summary>
-    public bool UseNativeCompanionCloneForLinkedAccessories { get; set; } = true;
+    /// <summary>Internal compatibility switch for the shelved 0.9 linked-child import path. Kept for config compatibility, but disabled in public builds.</summary>
+    public bool UseNativeCompanionCloneForLinkedAccessories { get; set; } = false;
 
     /// <summary>Legacy field kept so old config files deserialize safely. The separate ornament clone path has been retired.</summary>
     public bool CloneLinkedFashionAccessories { get; set; } = false;
@@ -112,6 +112,32 @@ public class Configuration : IPluginConfiguration
             // opt-in for existing users until it has had wider GPose testing.
             ClearEmoteVfxOnIsolation = false;
             Version = 5;
+            changed = true;
+        }
+
+        if (Version < 6)
+        {
+            // 0.9.0.3 shelves linked accessory/mount preservation and returns public imports
+            // to the stable legacy GPose event path. Keep the old fields for config safety.
+            Version = 6;
+            changed = true;
+        }
+
+        // Public safety clamp: experimental/dev configs may have a higher schema version
+        // with linked-child diagnostics enabled. This release intentionally disables them.
+        if (HandleLinkedFashionAccessories
+            || UseNativeCompanionCloneForLinkedAccessories
+            || CloneLinkedFashionAccessories
+            || AllowExperimentalAccessoryBindPatch
+            || EnableAccessoryDiagnostics
+            || Version > 6)
+        {
+            HandleLinkedFashionAccessories = false;
+            UseNativeCompanionCloneForLinkedAccessories = false;
+            CloneLinkedFashionAccessories = false;
+            AllowExperimentalAccessoryBindPatch = false;
+            EnableAccessoryDiagnostics = false;
+            Version = 6;
             changed = true;
         }
 

@@ -97,7 +97,7 @@ public sealed class GposeImportService : IDisposable
     public bool CanImport(ActorEntry actor)
     {
         return clientState.IsGPosing
-            && (initialized || configuration.UseNativeCompanionCloneForLinkedAccessories)
+            && initialized
             && actor.IsOverworldActor
             && actor.IsPlayerCharacter
             && !actor.IsLocalPlayer
@@ -115,7 +115,7 @@ public sealed class GposeImportService : IDisposable
             return false;
         }
 
-        if (!initialized && !configuration.UseNativeCompanionCloneForLinkedAccessories)
+        if (!initialized)
         {
             LastImportStatus = "Import refused: actor spawner is not initialized. Check /xllog for signature errors.";
             return false;
@@ -309,7 +309,7 @@ public sealed class GposeImportService : IDisposable
         if (!configuration.HandleLinkedFashionAccessories)
         {
             if (accessories.Count > 0)
-                Plugin.Log.Information($"Gpose Cast: linked companion/mount/accessory handling is disabled; leaving {accessories.Count} linked child actor(s) untouched.");
+                Plugin.Log.Information($"Gpose Cast: linked companion/mount/accessory preservation is shelved; importing base actor only and leaving {accessories.Count} linked child actor(s) to the game/client.");
 
             return new LinkedAccessoryImportResult(0, 0, accessories.Count, LinkedChildImportUsed: false, HandlingEnabled: false);
         }
@@ -321,9 +321,9 @@ public sealed class GposeImportService : IDisposable
         }
 
         if (accessories.Count > 0)
-            Plugin.Log.Information($"Gpose Cast: preserving {accessories.Count} original linked companion/mount/accessory actor(s); separate GPose child import has been retired.");
+            Plugin.Log.Information($"Gpose Cast: linked companion/mount/accessory preservation is shelved; importing base actor only and leaving {accessories.Count} linked child actor(s) to the game/client.");
 
-        return new LinkedAccessoryImportResult(0, 0, accessories.Count, LinkedChildImportUsed: false, HandlingEnabled: true);
+        return new LinkedAccessoryImportResult(0, 0, accessories.Count, LinkedChildImportUsed: false, HandlingEnabled: false);
     }
 
     /// <summary>Formats the source actor used for a GPose spawn event.</summary>
@@ -361,7 +361,7 @@ public sealed class GposeImportService : IDisposable
 
         var accessoryLabel = accessoryResult.Total == 1 ? "linked fashion accessory" : "linked fashion accessories";
         if (!accessoryResult.HandlingEnabled)
-            return $"{baseStatus} Ignored {accessoryResult.Total} {accessoryLabel}; accessory handling is disabled.";
+            return $"{baseStatus} Linked {accessoryLabel} are temporarily unsupported.";
 
         return $"{baseStatus} Preserved {accessoryResult.Total} linked {accessoryLabel}.";
     }
@@ -369,13 +369,11 @@ public sealed class GposeImportService : IDisposable
     /// <summary>Returns true when the linked-child import path should be used for this import.</summary>
     private bool ShouldUseLinkedChildImport(ActorEntry source, IReadOnlyList<ActorEntry> linkedAccessories)
     {
-        if (!configuration.HandleLinkedFashionAccessories || !configuration.UseNativeCompanionCloneForLinkedAccessories)
-            return false;
-
-        if (linkedAccessories.Count > 0)
-            return true;
-
-        return HasNativeSpawnedCompanion(source);
+        // Public 0.9.0.3 intentionally shelves the linked-child import path.
+        // The native code remains in place for future investigation, but normal
+        // imports use the legacy GPose event path because it preserves external
+        // PlayerSync/Lightless/Penumbra state more reliably.
+        return false;
     }
 
     /// <summary>Checks whether the source character currently owns an ornament, mount, or companion through the linked-child slot.</summary>
@@ -1014,7 +1012,7 @@ public sealed class GposeImportService : IDisposable
     private bool CanImportLinkedCompanionActor(ActorEntry actor)
     {
         return clientState.IsGPosing
-            && (initialized || configuration.UseNativeCompanionCloneForLinkedAccessories)
+            && initialized
             && actor.IsOverworldActor
             && (actor.IsFashionAccessory || actor.IsCompanionLike)
             && actor.IsICharacter

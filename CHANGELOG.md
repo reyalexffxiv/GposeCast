@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0.3
+
+* Temporarily removed fashion accessory support due to incompatibilities with sync/penumbra/glamourer plugins.
+* Kept the optional anti-glowstick isolation cleanup from 0.9.0.1.
+
 ## 0.9.0.2
 
 * Code cleanup and public UI polish.

@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v10.0": {
-      "GposeCast/0.9.0.2": {
+      "GposeCast/0.9.0.3": {
         "runtime": {
           "GposeCast.dll": {}
         }
@@ -14,7 +14,7 @@
     }
   },
   "libraries": {
-    "GposeCast/0.9.0.2": {
+    "GposeCast/0.9.0.3": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
