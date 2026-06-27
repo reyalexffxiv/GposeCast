@@ -2,7 +2,7 @@
   "Author": "reyalexffxiv",
   "Name": "Gpose Cast",
   "InternalName": "GposeCast",
-  "AssemblyVersion": "0.9.0.1",
+  "AssemblyVersion": "0.9.0.2",
   "Description": "A compact GPose casting tool. Search visible actors, import overworld players into GPose for Brio/Ktisis, build a picked group, and hide everyone else locally for cleaner screenshots.",
   "ApplicableVersion": "any",
   "Tags": [

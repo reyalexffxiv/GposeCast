@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0.2
+
+* Code cleanup and public UI polish.
+* Removed the internal diagnostics toggle.
+* No change to import, isolation, restore, or anti-glowstick behavior.
+
 ## 0.9.0.1
 
 * Added an optional setting to clear lingering emote effects when isolating actors.

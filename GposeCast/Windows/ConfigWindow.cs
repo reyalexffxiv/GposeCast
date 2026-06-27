@@ -55,12 +55,6 @@ public sealed class ConfigWindow : Window, IDisposable
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("When importing a player, keep linked umbrellas, wings, mounts, and similar child actors attached where the game exposes them.");
 
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.TextColored(new Vector4(0.65f, 0.85f, 1f, 1f), "Diagnostics");
-        DrawCheckbox("Show diagnostic buttons", nameof(Configuration.EnableAccessoryDiagnostics), configuration.EnableAccessoryDiagnostics, value => configuration.EnableAccessoryDiagnostics = value);
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Shows Dump/State buttons and enables verbose import/isolation logs for troubleshooting.");
 
         ImGui.Spacing();
         ImGui.Separator();
