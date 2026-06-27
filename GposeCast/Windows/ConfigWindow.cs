@@ -16,7 +16,7 @@ public sealed class ConfigWindow : Window, IDisposable
     /// <summary>Creates the configuration window.</summary>
     public ConfigWindow(Plugin plugin) : base("Gpose Cast Settings###GposeCastConfig")
     {
-        Size = new Vector2(390, 300);
+        Size = new Vector2(390, 335);
         SizeCondition = ImGuiCond.FirstUseEver;
         configuration = plugin.Configuration;
     }
@@ -35,6 +35,9 @@ public sealed class ConfigWindow : Window, IDisposable
         ImGui.Spacing();
         DrawCheckbox("Keep self visible", nameof(Configuration.KeepSelfVisible), configuration.KeepSelfVisible, value => configuration.KeepSelfVisible = value);
         DrawCheckbox("Auto-hide new arrivals", nameof(Configuration.AutoHideNewArrivals), configuration.AutoHideNewArrivals, value => configuration.AutoHideNewArrivals = value);
+        DrawCheckbox("Clear emote effects when isolating", nameof(Configuration.ClearEmoteVfxOnIsolation), configuration.ClearEmoteVfxOnIsolation, value => configuration.ClearEmoteVfxOnIsolation = value);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Attempts to clear lingering emote VFX, such as glowsticks, before hiding non-picked players, then keeps the harmless local scrub active while they stay hidden.");
         DrawCheckbox("Auto-open in GPose", nameof(Configuration.AutoOpenInGpose), configuration.AutoOpenInGpose, value => configuration.AutoOpenInGpose = value);
         DrawCheckbox("Show peepo mascot", nameof(Configuration.ShowMascot), configuration.ShowMascot, value => configuration.ShowMascot = value);
 

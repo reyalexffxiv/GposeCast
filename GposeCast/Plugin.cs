@@ -145,6 +145,7 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
+        Visibility.ProcessPendingIsolationWork();
         EnforceActiveIsolation();
     }
 

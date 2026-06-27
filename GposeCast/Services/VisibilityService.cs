@@ -17,10 +17,16 @@ namespace GposeCast.Services;
 public sealed class VisibilityService
 {
     private const float HiddenAlpha = 0.0f;
+    private const ushort DanceActionTimelineId = 700;
+    private const int EmoteVfxScrubDelayFrames = 2;
+    private const int MaxSustainedEmoteVfxScrubsPerFrame = 16;
 
     private readonly ActorScannerService actorScanner;
     private readonly Configuration configuration;
     private readonly Dictionary<ActorKey, HiddenActorState> hiddenActors = new();
+    private readonly Dictionary<ActorKey, PendingScrubHide> pendingScrubHides = new();
+    private readonly HashSet<ActorKey> sustainedEmoteVfxScrubs = new();
+    private int sustainedEmoteVfxScrubCursor;
     private readonly HashSet<ActorKey> protectedFashionAccessories = new();
 
     /// <summary>Creates a visibility service backed by the scanner for live actor lookup.</summary>
@@ -111,6 +117,9 @@ public sealed class VisibilityService
     public void StopIsolation()
     {
         IsIsolationActive = false;
+        pendingScrubHides.Clear();
+        sustainedEmoteVfxScrubs.Clear();
+        sustainedEmoteVfxScrubCursor = 0;
         RestoreAll();
         protectedFashionAccessories.Clear();
     }
@@ -171,6 +180,86 @@ public sealed class VisibilityService
             }
 
             Hide(actor, allowLocalPlayer: false, reason: "group isolation", allowLinkedCompanion: IsLinkedCompanionActor(actor));
+        }
+    }
+
+    /// <summary>
+    /// Completes delayed isolation hides that first played a harmless local animation to
+    /// clear lingering emote VFX such as glowsticks. Called from Framework.Update.
+    /// </summary>
+    public void ProcessPendingIsolationWork()
+    {
+        ProcessPendingEmoteVfxScrubHides();
+        ProcessSustainedEmoteVfxScrubs();
+    }
+
+    /// <summary>Completes delayed hides after the first local animation scrub has had time to clear active VFX.</summary>
+    private void ProcessPendingEmoteVfxScrubHides()
+    {
+        if (pendingScrubHides.Count == 0)
+            return;
+
+        foreach (var (key, pending) in pendingScrubHides.ToArray())
+        {
+            if (pending.RemainingFrames > 0)
+            {
+                pendingScrubHides[key] = pending with { RemainingFrames = pending.RemainingFrames - 1 };
+                continue;
+            }
+
+            pendingScrubHides.Remove(key);
+            if (Hide(pending.Actor, pending.AllowLocalPlayer, pending.Reason, pending.AllowFashionAccessory, pending.AllowLinkedCompanion, skipEmoteVfxScrub: true))
+                sustainedEmoteVfxScrubs.Add(key);
+        }
+    }
+
+    /// <summary>
+    /// Keeps already-hidden isolation actors on a harmless local timeline so looping emote
+    /// VFX do not re-emit after the first scrub. This only runs for actors hidden by
+    /// isolation and stops as soon as isolation/restoration cleanup runs.
+    /// </summary>
+    private void ProcessSustainedEmoteVfxScrubs()
+    {
+        if (sustainedEmoteVfxScrubs.Count == 0)
+            return;
+
+        if (!IsIsolationActive || !configuration.ClearEmoteVfxOnIsolation)
+        {
+            sustainedEmoteVfxScrubs.Clear();
+            sustainedEmoteVfxScrubCursor = 0;
+            return;
+        }
+
+        var keys = sustainedEmoteVfxScrubs.ToArray();
+        if (keys.Length == 0)
+            return;
+
+        if (sustainedEmoteVfxScrubCursor >= keys.Length)
+            sustainedEmoteVfxScrubCursor = 0;
+
+        var processed = 0;
+        var scanned = 0;
+        while (processed < MaxSustainedEmoteVfxScrubsPerFrame && scanned < keys.Length)
+        {
+            var key = keys[sustainedEmoteVfxScrubCursor];
+            sustainedEmoteVfxScrubCursor = (sustainedEmoteVfxScrubCursor + 1) % keys.Length;
+            scanned++;
+
+            if (!hiddenActors.TryGetValue(key, out var state))
+            {
+                sustainedEmoteVfxScrubs.Remove(key);
+                continue;
+            }
+
+            var live = actorScanner.FindAnyCurrent(key, state.Name, state.ObjectKind);
+            if (live is null || live.Address == nint.Zero || !live.IsPlayerCharacter || live.IsLocalPlayer)
+            {
+                sustainedEmoteVfxScrubs.Remove(key);
+                continue;
+            }
+
+            TryApplyEmoteVfxScrub(live);
+            processed++;
         }
     }
 
@@ -303,7 +392,7 @@ public sealed class VisibilityService
     }
 
     /// <summary>Applies alpha hide to a live actor and stores the original alpha.</summary>
-    private bool Hide(ActorEntry actor, bool allowLocalPlayer, string reason, bool allowFashionAccessory = false, bool allowLinkedCompanion = false)
+    private bool Hide(ActorEntry actor, bool allowLocalPlayer, string reason, bool allowFashionAccessory = false, bool allowLinkedCompanion = false, bool skipEmoteVfxScrub = false)
     {
         if (actor.IsLocalPlayer && !allowLocalPlayer)
         {
@@ -325,6 +414,9 @@ public sealed class VisibilityService
         }
 
         if (hiddenActors.ContainsKey(live.Key))
+            return true;
+
+        if (!skipEmoteVfxScrub && TryQueueEmoteVfxScrubBeforeHide(live, allowLocalPlayer, reason, allowFashionAccessory, allowLinkedCompanion))
             return true;
 
         try
@@ -352,9 +444,75 @@ public sealed class VisibilityService
         }
     }
 
+    /// <summary>
+    /// Queues a one-shot local animation scrub before isolation hides a player. Some emote
+    /// VFX, notably glowsticks, can remain visible if the actor is alpha-hidden while the
+    /// emote is still active. Playing a basic non-VFX timeline first gives the client one
+    /// or two frames to release those effects before the hide is applied.
+    /// </summary>
+    private bool TryQueueEmoteVfxScrubBeforeHide(ActorEntry live, bool allowLocalPlayer, string reason, bool allowFashionAccessory, bool allowLinkedCompanion)
+    {
+        if (!configuration.ClearEmoteVfxOnIsolation)
+            return false;
+
+        if (reason != "group isolation")
+            return false;
+
+        if (!live.IsPlayerCharacter || live.IsLocalPlayer || live.Address == nint.Zero)
+            return false;
+
+        if (pendingScrubHides.ContainsKey(live.Key))
+            return true;
+
+        if (!TryApplyEmoteVfxScrub(live))
+            return false;
+
+        pendingScrubHides[live.Key] = new PendingScrubHide(
+            live,
+            allowLocalPlayer,
+            reason,
+            allowFashionAccessory,
+            allowLinkedCompanion,
+            EmoteVfxScrubDelayFrames);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Applies the local-only animation used to clear lingering emote VFX before hiding.
+    /// This uses the character timeline directly and does not send a chat command or talk
+    /// to the server. The timeline id is the base-game Dance animation seen in Brio as
+    /// "Dance / 700 emote/dance".
+    /// </summary>
+    private static bool TryApplyEmoteVfxScrub(ActorEntry actor)
+    {
+        try
+        {
+            unsafe
+            {
+                var native = (NativeCharacter*)actor.Address;
+                if (native == null)
+                    return false;
+
+                native->Timeline.PlayActionTimeline(DanceActionTimelineId);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Debug(ex, $"Gpose Cast: emote VFX scrub failed for {actor.DisplayName}; hiding actor normally.");
+            return false;
+        }
+    }
+
     /// <summary>Restores a single hidden actor if it is still loaded.</summary>
     public bool Restore(ActorKey key)
     {
+        pendingScrubHides.Remove(key);
+        sustainedEmoteVfxScrubs.Remove(key);
+        if (sustainedEmoteVfxScrubs.Count == 0)
+            sustainedEmoteVfxScrubCursor = 0;
+
         if (!hiddenActors.TryGetValue(key, out var state))
             return false;
 
@@ -428,6 +586,10 @@ public sealed class VisibilityService
     /// <summary>Restores all actors hidden by the plugin.</summary>
     public void RestoreAll()
     {
+        pendingScrubHides.Clear();
+        sustainedEmoteVfxScrubs.Clear();
+        sustainedEmoteVfxScrubCursor = 0;
+
         foreach (var key in new List<ActorKey>(hiddenActors.Keys))
             Restore(key);
 
@@ -503,4 +665,7 @@ public sealed class VisibilityService
 
     /// <summary>Original alpha state for one hidden actor.</summary>
     private readonly record struct HiddenActorState(ActorKey Key, string Name, string DisplayName, ObjectKind ObjectKind, float OriginalAlpha);
+
+    /// <summary>Pending delayed hide after an emote-VFX scrub timeline has been played.</summary>
+    private readonly record struct PendingScrubHide(ActorEntry Actor, bool AllowLocalPlayer, string Reason, bool AllowFashionAccessory, bool AllowLinkedCompanion, int RemainingFrames);
 }

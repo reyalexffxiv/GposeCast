@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "c1k19gJZTYE=",
+  "success": true,
+  "projectFilePath": "G:\\AmberDev\\GposeCastRepo\\GposeCast\\GposeCast.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\reyal\\.nuget\\packages\\dalamudpackager\\15.0.0\\dalamudpackager.15.0.0.nupkg.sha512",
+    "C:\\Users\\reyal\\.nuget\\packages\\dotnet.reproduciblebuilds\\1.2.39\\dotnet.reproduciblebuilds.1.2.39.nupkg.sha512"
+  ],
+  "logs": []
+}

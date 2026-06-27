@@ -1,0 +1,9 @@
+G:\AmberDev\GposeCastRepo\GposeCast\bin\x64\Release\GposeCast.deps.json
+G:\AmberDev\GposeCastRepo\GposeCast\bin\x64\Release\GposeCast.dll
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.csproj.AssemblyReference.cache
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.GeneratedMSBuildEditorConfig.editorconfig
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.AssemblyInfoInputs.cache
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.AssemblyInfo.cs
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.csproj.CoreCompileInputs.cache
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.sourcelink.json
+G:\AmberDev\GposeCastRepo\GposeCast\obj\x64\Release\GposeCast.dll

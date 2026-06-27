@@ -10,7 +10,7 @@ namespace GposeCast;
 public class Configuration : IPluginConfiguration
 {
     /// <summary>Dalamud configuration schema version.</summary>
-    public int Version { get; set; } = 4;
+    public int Version { get; set; } = 5;
 
     /// <summary>Default state for the compact actor list's player filter.</summary>
     public bool PlayersOnly { get; set; } = true;
@@ -38,6 +38,9 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>Whether isolation should keep enforcing itself as actors load in.</summary>
     public bool AutoHideNewArrivals { get; set; } = true;
+
+    /// <summary>Attempts to clear and keep suppressing lingering emote VFX, such as glowsticks, on non-picked players hidden during isolation.</summary>
+    public bool ClearEmoteVfxOnIsolation { get; set; } = false;
 
     /// <summary>Whether the main window should open automatically when GPose starts.</summary>
     public bool AutoOpenInGpose { get; set; } = true;
@@ -100,6 +103,15 @@ public class Configuration : IPluginConfiguration
             AllowExperimentalAccessoryBindPatch = false;
             EnableAccessoryDiagnostics = false;
             Version = 4;
+            changed = true;
+        }
+
+        if (Version < 5)
+        {
+            // New in 0.9.0.1. This touches animation state before hiding, so keep it
+            // opt-in for existing users until it has had wider GPose testing.
+            ClearEmoteVfxOnIsolation = false;
+            Version = 5;
             changed = true;
         }
 

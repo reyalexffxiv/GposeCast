@@ -17,6 +17,7 @@ It is intentionally small. It is not Brio, Ktisis, or Glamourer, and it does not
 - Builds a session-only picked group.
 - Isolates the picked group by setting non-picked actors' local alpha to zero.
 - Keeps isolation active for late-loaded actors while isolation is on.
+- Can optionally try to clear lingering emote VFX, such as glowsticks, before hiding non-picked players during isolation.
 - Can optionally include supported NPC-like actors, minions, pets, mounts, and ornaments in the hide sweep.
 - Restores hidden actors and removes Gpose Cast-created temporary actors when isolation stops, GPose ends, or the plugin unloads.
 
@@ -39,3 +40,7 @@ It is intentionally small. It is not Brio, Ktisis, or Glamourer, and it does not
 9. Press `Stop`, `Restore`, `Clear`, or leave GPose to restore/clean up automatically.
 
 Gpose Cast intentionally refuses to open outside GPose and will print an error message if `/gposecast` is used in the overworld.
+
+### DEV note: emote-effect isolation scrub
+
+The optional **Clear emote effects when isolating** setting first plays a harmless local Dance timeline on non-picked players that are about to be hidden, then keeps that scrub timeline refreshed while those actors remain hidden. This is intended to suppress looping emote VFX such as glowsticks without touching picked actors or requiring Brio.
